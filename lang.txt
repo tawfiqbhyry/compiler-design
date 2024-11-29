@@ -1,0 +1,88 @@
+<program> ::= <statement_list>
+
+<statement_list> ::= <statement> | <statement> <statement_list>
+
+<statement> ::= <variable_declaration> 
+              | <array_declaration>
+              | <assignment_statement>
+              | <array_assignment>
+              | <if_statement> 
+              | <while_statement> 
+              | <for_statement>
+              | <switch_statement>
+              | <function_declaration>
+              | <function_call>
+              | <class_declaration>
+              | <return_statement>
+              | <try_catch_statement>
+              | <expression>
+              | <comment>
+
+<variable_declaration> ::= "var" <identifier> ":" <type> [ "=" <expression> ] ";"
+
+<array_declaration> ::= "array" <identifier> ":" <type> "[" <number> "]" [ "=" <array_initialization> ] ";"
+
+<array_initialization> ::= "{" <expression_list> "}"
+
+<assignment_statement> ::= <identifier> "=" <expression> ";"
+
+<array_assignment> ::= <identifier> "[" <expression> "]" "=" <expression> ";"
+
+<if_statement> ::= "if" "(" <expression> ")" "{" <statement_list> "}" 
+                 [ "else" "{" <statement_list> "}" ]
+
+<while_statement> ::= "while" "(" <expression> ")" "{" <statement_list> "}"
+
+<for_statement> ::= "for" "(" <assignment_statement> <expression> ";" <expression> ")" "{" <statement_list> "}"
+
+<switch_statement> ::= "switch" "(" <expression> ")" "{" <case_list> [ "default" ":" <statement_list> ] "}"
+
+<case_list> ::= <case> | <case> <case_list>
+
+<case> ::= "case" <expression> ":" <statement_list>
+
+<function_declaration> ::= "func" <identifier> "(" [ <parameter_list> ] ")" ":" <type> "{" <statement_list> "}"
+
+<parameter_list> ::= <parameter> | <parameter> "," <parameter_list>
+
+<parameter> ::= <identifier> ":" <type>
+
+<function_call> ::= <identifier> "(" [ <argument_list> ] ")" ";"
+
+<argument_list> ::= <expression> | <expression> "," <argument_list>
+
+<return_statement> ::= "return" <expression> ";"
+
+<class_declaration> ::= "class" <identifier> "{" <class_body> "}"
+
+<class_body> ::= <class_member> | <class_member> <class_body>
+
+<class_member> ::= <variable_declaration> | <function_declaration>
+
+<try_catch_statement> ::= "try" "{" <statement_list> "}" "catch" "(" <identifier> ")" "{" <statement_list> "}"
+
+<expression> ::= <term> | <expression> <operator> <term>
+
+<term> ::= <factor> | <term> <operator> <factor>
+
+<factor> ::= <number> | <string> | <boolean> | <identifier> | "(" <expression> ")" | <array_access> | <function_call>
+
+<array_access> ::= <identifier> "[" <expression> "]"
+
+<type> ::= "int" | "float" | "string" | "bool" | "void" | "array" | "object"
+
+<operator> ::= "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" | "%"
+
+<comment> ::= "//" <any_character_sequence>
+
+<identifier> ::= <letter> { <letter> | <digit> | "_" }
+
+<number> ::= <digit> { <digit> } | <digit> "." <digit> { <digit> }
+
+<string> ::= "\"" <any_character_sequence> "\""
+
+<boolean> ::= "true" | "false"
+
+<letter> ::= "a" | "b" | "c" | ... | "z" | "A" | "B" | ... | "Z"
+
+<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
