@@ -1,3 +1,15 @@
+Program ::= StatementList
+StatementList ::= Statement StatementList | ε
+Statement ::= VariableDeclaration | FunctionDeclaration | IfStatement | WhileStatement
+VariableDeclaration ::= var IDENTIFIER ASSIGN Expression SEMICOLON
+FunctionDeclaration ::= function IDENTIFIER LPAREN ParameterList RPAREN Block
+IfStatement ::= if LPAREN Expression RPAREN Block else Block
+WhileStatement ::= while LPAREN Expression RPAREN Block
+Expression ::= Term OPERATOR Expression | Term
+Term ::= IDENTIFIER | Literal
+ParameterList ::= IDENTIFIER COMMA ParameterList | IDENTIFIER | ε
+Block ::= LBRACE StatementList RBRACE
+
 <program> ::= <statement_list>
 
 <statement_list> ::= <statement> | <statement> <statement_list>

@@ -1,8 +1,10 @@
 import re
+import tkinter as tk
+from tkinter import scrolledtext
 
 # Define token specifications
 TOKEN_SPECIFICATION = [
-    ('COMMENT', r'//[^\n]*'),                                  # Single-line comments
+    ('COMMENT', r'//[^\n]*'),                                 # Single-line comments
     ('KEYWORD', r'\b(if|else|while|for|return|function|then|do|break|continue|var|let|const|switch|case|import|export|from|to)\b'),
     ('BOOLEAN', r'\b(true|false)\b'),                         # Boolean values
     ('NUMBER', r'\b\d+(\.\d+)?\b'),                           # Integer or floating-point numbers
@@ -10,7 +12,7 @@ TOKEN_SPECIFICATION = [
     ('IDENTIFIER', r'\b[A-Za-z_][A-Za-z_0-9]*\b'),            # Identifiers
     ('BOOL_COMP', r'==|!=|<=|>=|<|>'),                        # Boolean comparisons
     ('ASSIGN', r'='),                                         # Assignment operator
-    ('OPERATOR', r'[+\-*/%&|!]+'),                             # Arithmetic and logical operators
+    ('OPERATOR', r'[+\-*/%&|!]+'),                            # Arithmetic and logical operators
     ('LPAREN', r'\('),                                        # Left parenthesis
     ('RPAREN', r'\)'),                                        # Right parenthesis
     ('LBRACE', r'\{'),                                        # Left brace
@@ -21,6 +23,97 @@ TOKEN_SPECIFICATION = [
     ('WHITESPACE', r'[ \t]+'),                                # Spaces and tabs
     ('NEWLINE', r'\n'),                                       # Line endings
 ]
+
+grammar = {
+    "Program": [["StatementList"]],
+    "StatementList": [["Statement", "StatementList"], ["ε"]],
+    "Statement": [["VariableDeclaration"], ["FunctionDeclaration"], ["IfStatement"], ["WhileStatement"]],
+    "VariableDeclaration": [["var", "IDENTIFIER", "ASSIGN", "Expression", "SEMICOLON"]],
+    "FunctionDeclaration": [["function", "IDENTIFIER", "LPAREN", "ParameterList", "RPAREN", "Block"]],
+    "IfStatement": [["if", "LPAREN", "Expression", "RPAREN", "Block", "else", "Block"]],
+    "WhileStatement": [["while", "LPAREN", "Expression", "RPAREN", "Block"]],
+    "Expression": [["Term", "OPERATOR", "Expression"], ["Term"]],
+    "Term": [["IDENTIFIER"], ["Literal"]],
+    "ParameterList": [["IDENTIFIER", "COMMA", "ParameterList"], ["IDENTIFIER"], ["ε"]],
+    "Block": [["LBRACE", "StatementList", "RBRACE"]],
+}
+
+def compute_first(grammar):
+    first = {non_terminal: set() for non_terminal in grammar}
+
+    def first_of(symbol):
+        if symbol in first:  # Non-terminal
+            return first[symbol]
+        else:  # Terminal
+            return {symbol}
+
+    changed = True
+    while changed:
+        changed = False
+        for non_terminal, productions in grammar.items():
+            for production in productions:
+                for symbol in production:
+                    before = len(first[non_terminal])
+                    first[non_terminal].update(first_of(symbol))
+                    if "ε" not in first_of(symbol):
+                        break
+                else:
+                    first[non_terminal].add("ε")
+                if len(first[non_terminal]) > before:
+                    changed = True
+    return first
+
+def compute_follow(grammar, first):
+    follow = {non_terminal: set() for non_terminal in grammar}
+    follow["Program"].add("$")  # Assuming Program is the start symbol
+
+    changed = True
+    while changed:
+        changed = False
+        for non_terminal, productions in grammar.items():
+            for production in productions:
+                for i, symbol in enumerate(production):
+                    if symbol in grammar:  # Non-terminal
+                        next_symbols = production[i + 1:]
+                        before = len(follow[symbol])
+
+                        # Add FIRST of next_symbols to FOLLOW of symbol
+                        follow[symbol].update(
+                            first_of_sequence(next_symbols, first)
+                        )
+
+                        # If next_symbols derive ε, add FOLLOW of current non-terminal
+                        if "ε" in first_of_sequence(next_symbols, first):
+                            follow[symbol].update(follow[non_terminal])
+
+                        if len(follow[symbol]) > before:
+                            changed = True
+    return follow
+
+def first_of_sequence(sequence, first):
+    result = set()
+    for symbol in sequence:
+        result.update(first.get(symbol, {symbol}))
+        if "ε" not in first.get(symbol, {symbol}):
+            break
+    else:
+        result.add("ε")
+    return result
+
+
+def display_grammar_and_sets(grammar, first, follow):
+    print("Grammar (BNF):")
+    for non_terminal, productions in grammar.items():
+        print(f"{non_terminal} ::= {' | '.join(' '.join(p) for p in productions)}")
+
+    print("\nFIRST Sets:")
+    for non_terminal, first_set in first.items():
+        print(f"FIRST({non_terminal}) = {{ {', '.join(first_set)} }}")
+
+    print("\nFOLLOW Sets:")
+    for non_terminal, follow_set in follow.items():
+        print(f"FOLLOW({non_terminal}) = {{ {', '.join(follow_set)} }}")
+
 
 # Compile regex
 TOKENS_RE = '|'.join(f'(?P<{pair[0]}>{pair[1]})' for pair in TOKEN_SPECIFICATION)
@@ -452,63 +545,96 @@ class Parser:
 # AST Printer for visualization
 def print_ast(node, indent=0):
     prefix = '  ' * indent
+    result = ""
+    
     if isinstance(node, Program):
-        print(f"{prefix}Program")
+        result += f"{prefix}Program\n"
         for stmt in node.statements:
-            print_ast(stmt, indent + 1)
+            result += print_ast(stmt, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, VariableDeclaration):
-        print(f"{prefix}VariableDeclaration: {node.name}")
+        result += f"{prefix}VariableDeclaration: {node.name}\n"
         if node.initializer:
-            print_ast(node.initializer, indent + 1)
+            result += print_ast(node.initializer, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, FunctionDeclaration):
-        print(f"{prefix}FunctionDeclaration: {node.name} Params: {node.params}")
-        print_ast(node.body, indent + 1)
+        result += f"{prefix}FunctionDeclaration: {node.name} Params: {node.params}\n"
+        result += print_ast(node.body, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, IfStatement):
-        print(f"{prefix}IfStatement")
-        print(f"{prefix}  Condition:")
-        print_ast(node.condition, indent + 2)
-        print(f"{prefix}  Then:")
-        print_ast(node.then_branch, indent + 2)
+        result += f"{prefix}IfStatement\n"
+        result += f"{prefix}  Condition:\n"
+        result += print_ast(node.condition, indent + 2)
+        result += f"{prefix}  Then:\n"
+        result += print_ast(node.then_branch, indent + 2)
         if node.else_branch:
-            print(f"{prefix}  Else:")
-            print_ast(node.else_branch, indent + 2)
+            result += f"{prefix}  Else:\n"
+            result += print_ast(node.else_branch, indent + 2)
+        print(result, end="")
+        return result
     elif isinstance(node, WhileStatement):
-        print(f"{prefix}WhileStatement")
-        print(f"{prefix}  Condition:")
-        print_ast(node.condition, indent + 2)
-        print(f"{prefix}  Body:")
-        print_ast(node.body, indent + 2)
+        result += f"{prefix}WhileStatement\n"
+        result += f"{prefix}  Condition:\n"
+        result += print_ast(node.condition, indent + 2)
+        result += f"{prefix}  Body:\n"
+        result += print_ast(node.body, indent + 2)
+        print(result, end="")
+        return result
     elif isinstance(node, ReturnStatement):
-        print(f"{prefix}ReturnStatement")
+        result += f"{prefix}ReturnStatement\n"
         if node.expression:
-            print_ast(node.expression, indent + 1)
+            result += print_ast(node.expression, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, ExpressionStatement):
-        print(f"{prefix}ExpressionStatement")
-        print_ast(node.expression, indent + 1)
+        result += f"{prefix}ExpressionStatement\n"
+        result += print_ast(node.expression, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, Block):
-        print(f"{prefix}Block")
+        result += f"{prefix}Block\n"
         for stmt in node.statements:
-            print_ast(stmt, indent + 1)
+            result += print_ast(stmt, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, BinaryExpression):
-        print(f"{prefix}BinaryExpression: {node.operator}")
-        print_ast(node.left, indent + 1)
-        print_ast(node.right, indent + 1)
+        result += f"{prefix}BinaryExpression: {node.operator}\n"
+        result += print_ast(node.left, indent + 1)
+        result += print_ast(node.right, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, UnaryExpression):
-        print(f"{prefix}UnaryExpression: {node.operator}")
-        print_ast(node.operand, indent + 1)
+        result += f"{prefix}UnaryExpression: {node.operator}\n"
+        result += print_ast(node.operand, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, Literal):
-        print(f"{prefix}Literal: {node.value}")
+        result += f"{prefix}Literal: {node.value}\n"
+        print(result, end="")
+        return result
     elif isinstance(node, Identifier):
-        print(f"{prefix}Identifier: {node.name}")
+        result += f"{prefix}Identifier: {node.name}\n"
+        print(result, end="")
+        return result
     elif isinstance(node, AssignmentExpression):
-        print(f"{prefix}Assignment: {node.identifier} =")
-        print_ast(node.value, indent + 1)
+        result += f"{prefix}Assignment: {node.identifier} =\n"
+        result += print_ast(node.value, indent + 1)
+        print(result, end="")
+        return result
     elif isinstance(node, FunctionCall):
-        print(f"{prefix}FunctionCall: {node.name}")
+        result += f"{prefix}FunctionCall: {node.name}\n"
         for arg in node.arguments:
-            print_ast(arg, indent + 1)
+            result += print_ast(arg, indent + 1)
+        print(result, end="")
+        return result
     else:
-        print(f"{prefix}Unknown node type: {type(node).__name__}")
+        result += f"{prefix}Unknown node type: {type(node).__name__}\n"
+        print(result, end="")
+        return result
+
 
 # Symbol Table Printer for visualization
 def print_symbol_table(symbol_table, indent=0):
@@ -519,27 +645,83 @@ def print_symbol_table(symbol_table, indent=0):
     for child in symbol_table.children:
         print_symbol_table(child, indent + 1)
 
+def create_parse_table(grammar, first, follow):
+    parse_table = {}
+    for non_terminal in grammar:
+        parse_table[non_terminal] = {}
+        for production in grammar[non_terminal]:
+            for terminal in first_of_sequence(production, first):
+                if terminal != "ε":
+                    parse_table[non_terminal][terminal] = production
+            if "ε" in first_of_sequence(production, first):
+                for terminal in follow[non_terminal]:
+                    parse_table[non_terminal][terminal] = production
+    return parse_table
+
+def display_parse_table(parse_table):
+    print("Parse Table:")
+    for non_terminal, row in parse_table.items():
+        print(f"{non_terminal}: {row}")
+
+
+def GUI():
+    def tokenize_input():
+        code = input_text.get("1.0", tk.END).strip()
+        tokens = tokenize(code)
+        token_output.delete("1.0", tk.END)
+        for token in tokens:
+            token_output.insert(tk.END, f"{token}\n")
+
+    def parse_input():
+        code = input_text.get("1.0", tk.END).strip()
+        tokens = tokenize(code)
+        parser = Parser(tokens)
+        ast = parser.parse()
+        ast_output.delete("1.0", tk.END)
+        res_here = print_ast(ast, indent=0)
+        ast_output.insert("1.0", res_here)
+
+    def show_parse_table():
+        parse_table = create_parse_table(grammar, first, follow)
+        table_output.delete("1.0", tk.END)
+        for non_terminal, rules in parse_table.items():
+            table_output.insert(tk.END, f"{non_terminal}: {rules}\n")
+
+    # GUI
+    root = tk.Tk()
+    root.title("Compiler Simulation")
+
+    # Input Section
+    tk.Label(root, text="Source Code:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
+    input_text = scrolledtext.ScrolledText(root, height=10, width=60)
+    input_text.grid(row=1, column=0, padx=10, pady=5)
+
+    # Tokenized Output
+    tk.Label(root, text="Tokens:").grid(row=0, column=1, sticky=tk.W, padx=10, pady=5)
+    token_output = scrolledtext.ScrolledText(root, height=10, width=40)
+    token_output.grid(row=1, column=1, padx=10, pady=5)
+
+    # AST Output
+    tk.Label(root, text="Abstract Syntax Tree (AST):").grid(row=2, column=0, sticky=tk.W, padx=10, pady=5)
+    ast_output = scrolledtext.ScrolledText(root, height=10, width=60)
+    ast_output.grid(row=3, column=0, padx=10, pady=5)
+
+    # Parse Table Output
+    tk.Label(root, text="Parse Table:").grid(row=2, column=1, sticky=tk.W, padx=10, pady=5)
+    table_output = scrolledtext.ScrolledText(root, height=10, width=40)
+    table_output.grid(row=3, column=1, padx=10, pady=5)
+
+    # Buttons
+    tk.Button(root, text="Tokenize", command=tokenize_input).grid(row=4, column=0, sticky=tk.W, padx=10, pady=10)
+    tk.Button(root, text="Parse", command=parse_input).grid(row=4, column=0, sticky=tk.E, padx=10, pady=10)
+    tk.Button(root, text="Show Parse Table", command=show_parse_table).grid(row=4, column=1, sticky=tk.W, padx=10, pady=10)
+
+    root.mainloop()
+
+
 # Example usage of the tokenizer and parser
 if __name__ == "__main__":
-    sample_code = '''
-    // This is a comment
-    function add(a, b) {
-        var result = a + b;
-        return result;
-    }
-
-    var i = 0; // Declaration of 'i'
-
-    if (a > b) {
-        return a;
-    } else {
-        return b;
-    }
-
-    while (i < 10) {
-        i = i + 1;
-    }
-    '''
+    sample_code = open("x.TEAM", "r", encoding="utf-8").read()
     print("Tokenizing...\n")
     tokens = tokenize(sample_code)
     for token in tokens:
@@ -550,5 +732,13 @@ if __name__ == "__main__":
     ast = parser.parse()
     print_ast(ast)
     
+    print("\nComputing FIRST and FOLLOW sets...\n")
+    first = compute_first(grammar)
+    follow = compute_follow(grammar, first)
+    display_grammar_and_sets(grammar, first, follow)
+
     print("\nSymbol Table:\n")
     print_symbol_table(parser.global_symbol_table)
+
+    print("GUI Simulation: ")
+    GUI()
