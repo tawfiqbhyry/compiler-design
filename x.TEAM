@@ -1,5 +1,5 @@
 // Variable and Array Declarations
-var x: int;
+var x: int = 0;
 let y: float = 3.14;
 const z: string = "Hello World";
 array arr: int[5] = {1, 2, 3, 4, 5};

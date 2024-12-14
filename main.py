@@ -1,11 +1,12 @@
 import re
 import tkinter as tk
 from tkinter import scrolledtext
+from tkinter import ttk
 
 # Define token specifications
 TOKEN_SPECIFICATION = [
     ('COMMENT', r'//[^\n]*'),                                 # Single-line comments
-    ('KEYWORD', r'\b(if|else|while|for|return|func|then|do|break|continue|var|let|const|switch|case|import|export|from|to|array|class|try|catch|default)\b'),
+    ('KEYWORD', r'\b(if|else|while|for|return|func|then|do|break|continue|var|let|const|switch|case|import|export|from|to|array|class|try|catch|default|print)\b'),  # Added 'print'
     ('BOOLEAN', r'\b(true|false)\b'),                         # Boolean values
     ('TYPE', r'\b(int|float|string|bool|void|array|object)\b'),  # Types
     ('NUMBER', r'\b\d+(\.\d+)?\b'),                           # Integer or floating-point numbers
@@ -56,6 +57,7 @@ grammar = {
         ["ReturnStatement"],
         ["TryCatchStatement"],
         ["ExpressionStatement"],
+        ["PrintStatement"],  # Added PrintStatement
         ["Comment"]
     ],
     "VariableDeclaration": [
@@ -90,7 +92,7 @@ grammar = {
         ["while", "LPAREN", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
     ],
     "ForStatement": [
-        ["for", "LPAREN", "AssignmentStatement", "Expression", "SEMICOLON", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
+        ["for", "LPAREN", "VariableDeclaration|AssignmentStatement", "Expression", "SEMICOLON", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
     ],
     "SwitchStatement": [
         ["switch", "LPAREN", "Expression", "RPAREN", "LBRACE", "CaseList", "DefaultCase", "RBRACE"],
@@ -119,6 +121,14 @@ grammar = {
     ],
     "TryCatchStatement": [
         ["try", "LBRACE", "StatementList", "RBRACE", "catch", "LPAREN", "IDENTIFIER", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
+    ],
+    "ReturnStatement": [
+        ["return", "Expression", "SEMICOLON"],
+        ["return", "SEMICOLON"]
+    ],
+    "PrintStatement": [  # Added PrintStatement
+        ["print", "LPAREN", "Expression", "RPAREN", "SEMICOLON"],
+        ["print", "Expression", "SEMICOLON"]
     ],
     "ExpressionStatement": [
         ["Expression", "SEMICOLON"]
@@ -370,6 +380,10 @@ class ReturnStatement(ASTNode):
     def __init__(self, expression=None):
         self.expression = expression
 
+class PrintStatement(ASTNode):
+    def __init__(self, expression):
+        self.expression = expression
+
 class ExpressionStatement(ASTNode):
     def __init__(self, expression):
         self.expression = expression
@@ -412,7 +426,6 @@ class ArrayAccess(ASTNode):
         self.name = name
         self.index = index
 
-# Symbol class with comprehensive attributes
 # Symbol class with comprehensive attributes
 class Symbol:
     def __init__(self, name, kind, data_type=None, scope=None, declared_at=None):
@@ -522,6 +535,8 @@ class Parser:
                 return self.return_statement()
             elif keyword == 'try':
                 return self.try_catch_statement()
+            elif keyword == 'print':  # Handle print statement
+                return self.print_statement()
             else:
                 return self.expression_statement()
         elif self.current_token.type == 'IDENTIFIER':
@@ -702,7 +717,6 @@ class Parser:
             self.error("Expected function name.")
             return None
 
-
     def parameter_list(self):
         params = []
         if self.current_token and self.current_token.type == 'IDENTIFIER':
@@ -784,6 +798,8 @@ class Parser:
         if not self.consume('LPAREN'):
             return None
 
+        # Handle both VariableDeclaration and AssignmentStatement
+        init = None
         if self.current_token and self.current_token.type == 'KEYWORD' and self.current_token.value in ('var', 'let', 'const'):
             init = self.variable_declaration()
         elif self.current_token and self.current_token.type == 'IDENTIFIER':
@@ -884,7 +900,6 @@ class Parser:
             self.error("Expected class name.")
             return None
 
-
     def class_body(self):
         members = []
         while self.current_token and self.current_token.type != 'RBRACE':
@@ -948,7 +963,6 @@ class Parser:
         self.symbol_table = self.symbol_table.parent.parent  # Exit 'catch' and 'try' scopes
         return TryCatchStatement(try_block, catch_identifier, catch_block)
 
-
     def return_statement(self):
         self.consume('KEYWORD')  # 'return'
         expr = None
@@ -957,6 +971,20 @@ class Parser:
         if not self.consume('SEMICOLON'):
             return None
         return ReturnStatement(expr)
+
+    def print_statement(self):
+        self.consume('KEYWORD')  # 'print'
+        expr = None
+        if self.current_token and self.current_token.type == 'LPAREN':
+            self.consume('LPAREN')
+            expr = self.expression()
+            if not self.consume('RPAREN'):
+                return None
+        else:
+            expr = self.expression()
+        if not self.consume('SEMICOLON'):
+            return None
+        return PrintStatement(expr)
 
     def expression_statement(self):
         expr = self.expression()
@@ -1086,7 +1114,6 @@ class Parser:
             self.consume(token.type)  # Attempt to recover
             return None
 
-
     def function_call(self):
         func_name = self.current_token.value
         self.consume('IDENTIFIER')
@@ -1102,7 +1129,6 @@ class Parser:
         elif symbol.kind != 'function':
             self.error(f"Identifier '{func_name}' is not a function.")
         return FunctionCall(func_name, args)
-
 
     def array_access(self):
         array_name = self.current_token.value
@@ -1170,7 +1196,6 @@ class Parser:
                 self.error(f"Identifier '{func_name}' is not a function in class '{object_name}'.")
         return FunctionCall(f"{object_name}.{func_name}", args)
 
-
 # AST Printer for visualization
 def print_ast(node, indent=0):
     prefix = '  ' * indent
@@ -1204,24 +1229,28 @@ def print_ast(node, indent=0):
     elif isinstance(node, FunctionDeclaration):
         params_str = ', '.join(f"{name}:{ptype}" for name, ptype in node.params)
         result += f"{prefix}FunctionDeclaration: {node.name}({params_str}) : {node.return_type}\n"
-        result += print_ast(node.body, indent + 1)
+        for stmt in node.body:
+            result += print_ast(stmt, indent + 1)
         return result
     elif isinstance(node, IfStatement):
         result += f"{prefix}IfStatement\n"
         result += f"{prefix}  Condition:\n"
         result += print_ast(node.condition, indent + 2)
         result += f"{prefix}  Then:\n"
-        result += print_ast(node.then_branch, indent + 2)
+        for stmt in node.then_branch:
+            result += print_ast(stmt, indent + 2)
         if node.else_branch:
             result += f"{prefix}  Else:\n"
-            result += print_ast(node.else_branch, indent + 2)
+            for stmt in node.else_branch:
+                result += print_ast(stmt, indent + 2)
         return result
     elif isinstance(node, WhileStatement):
         result += f"{prefix}WhileStatement\n"
         result += f"{prefix}  Condition:\n"
         result += print_ast(node.condition, indent + 2)
         result += f"{prefix}  Body:\n"
-        result += print_ast(node.body, indent + 2)
+        for stmt in node.body:
+            result += print_ast(stmt, indent + 2)
         return result
     elif isinstance(node, ForStatement):
         result += f"{prefix}ForStatement\n"
@@ -1232,7 +1261,8 @@ def print_ast(node, indent=0):
         result += f"{prefix}  Increment:\n"
         result += print_ast(node.increment, indent + 2)
         result += f"{prefix}  Body:\n"
-        result += print_ast(node.body, indent + 2)
+        for stmt in node.body:
+            result += print_ast(stmt, indent + 2)
         return result
     elif isinstance(node, SwitchStatement):
         result += f"{prefix}SwitchStatement\n"
@@ -1247,11 +1277,13 @@ def print_ast(node, indent=0):
         result += f"{prefix}Case:\n"
         result += print_ast(node.expression, indent + 2)
         result += f"{prefix}  Statements:\n"
-        result += print_ast(node.statements, indent + 2)
+        for stmt in node.statements:
+            result += print_ast(stmt, indent + 2)
         return result
     elif isinstance(node, DefaultCase):
         result += f"{prefix}DefaultCase:\n"
-        result += print_ast(node.statements, indent + 2)
+        for stmt in node.statements:
+            result += print_ast(stmt, indent + 2)
         return result
     elif isinstance(node, ClassDeclaration):
         result += f"{prefix}ClassDeclaration: {node.name}\n"
@@ -1261,15 +1293,21 @@ def print_ast(node, indent=0):
     elif isinstance(node, TryCatchStatement):
         result += f"{prefix}TryCatchStatement\n"
         result += f"{prefix}  Try Block:\n"
-        result += print_ast(node.try_block, indent + 2)
+        for stmt in node.try_block:
+            result += print_ast(stmt, indent + 2)
         result += f"{prefix}  Catch Identifier: {node.catch_identifier}\n"
         result += f"{prefix}  Catch Block:\n"
-        result += print_ast(node.catch_block, indent + 2)
+        for stmt in node.catch_block:
+            result += print_ast(stmt, indent + 2)
         return result
     elif isinstance(node, ReturnStatement):
         result += f"{prefix}ReturnStatement\n"
         if node.expression:
             result += print_ast(node.expression, indent + 1)
+        return result
+    elif isinstance(node, PrintStatement):
+        result += f"{prefix}PrintStatement\n"
+        result += print_ast(node.expression, indent + 1)
         return result
     elif isinstance(node, ExpressionStatement):
         result += f"{prefix}ExpressionStatement\n"
@@ -1361,6 +1399,7 @@ def display_parse_table(parse_table):
             for production in productions:
                 prod_str = ' '.join(production)
                 print(f"  {terminal} -> {prod_str}")
+
 # Backend Class for Code Execution
 class Backend:
     def __init__(self, ast, symbol_table):
@@ -1466,7 +1505,7 @@ class Backend:
         class_env = {}
         for member in node.members:
             if isinstance(member, VariableDeclaration):
-                class_env[member.name] = member.initializer and self.visit(member.initializer)
+                class_env[member.name] = self.visit(member.initializer) if member.initializer else None
             elif isinstance(member, FunctionDeclaration):
                 class_env[member.name] = member
         self.classes[node.name] = class_env
@@ -1476,7 +1515,8 @@ class Backend:
             for stmt in node.try_block:
                 self.visit(stmt)
         except Exception as e:
-            self.current_env[node.catch_identifier] = str(e)
+            if node.catch_identifier:
+                self.current_env[node.catch_identifier] = str(e)
             for stmt in node.catch_block:
                 self.visit(stmt)
 
@@ -1484,6 +1524,10 @@ class Backend:
         if node.expression:
             return self.visit(node.expression)
         return None
+
+    def visit_PrintStatement(self, node):
+        value = self.visit(node.expression)
+        self.output += f"{value}\n"
 
     def visit_ExpressionStatement(self, node):
         return self.visit(node.expression)
@@ -1656,6 +1700,35 @@ class ReturnValue:
     def __init__(self, value):
         self.value = value
 
+class ScrollableFrame(ttk.Frame):
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        
+        # Create a canvas object and a vertical scrollbar for scrolling it
+        canvas = tk.Canvas(self, borderwidth=0, background="#f0f0f0")
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # Reset the view
+        canvas.xview_moveto(0)
+        canvas.yview_moveto(0)
+
+        # Create a frame inside the canvas which will contain all other widgets
+        self.scrollable_frame = ttk.Frame(canvas, padding=(10, 10, 10, 10))
+        
+        # Bind the frame to configure the scroll region
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        # Create a window in the canvas
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
 
 def GUI():
     def tokenize_input():
@@ -1727,49 +1800,111 @@ def GUI():
     # GUI
     root = tk.Tk()
     root.title("Compiler Simulation with Semantic Analysis and Execution")
+    root.geometry("700x800")  # Set an initial size; adjust as needed
+
+    # Create a ScrollableFrame
+    scrollable = ScrollableFrame(root)
+    scrollable.pack(fill="both", expand=True)
 
     # Input Section
-    tk.Label(root, text="Source Code:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
-    input_text = scrolledtext.ScrolledText(root, height=10, width=60)
+    tk.Label(scrollable.scrollable_frame, text="Source Code:", font=('Helvetica', 12, 'bold')).grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
+    input_text = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=20, width=80)
     input_text.grid(row=1, column=0, padx=10, pady=5)
 
     # Tokenized Output
-    tk.Label(root, text="Tokens:").grid(row=0, column=1, sticky=tk.W, padx=10, pady=5)
-    token_output = scrolledtext.ScrolledText(root, height=10, width=40)
-    token_output.grid(row=1, column=1, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Tokens:", font=('Helvetica', 12, 'bold')).grid(row=2, column=0, sticky=tk.W, padx=10, pady=5)
+    token_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=10, width=80, fg="green")
+    token_output.grid(row=3, column=0, padx=10, pady=5)
 
     # AST Output
-    tk.Label(root, text="Abstract Syntax Tree (AST):").grid(row=2, column=0, sticky=tk.W, padx=10, pady=5)
-    ast_output = scrolledtext.ScrolledText(root, height=10, width=60)
-    ast_output.grid(row=3, column=0, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Abstract Syntax Tree (AST):", font=('Helvetica', 12, 'bold')).grid(row=4, column=0, sticky=tk.W, padx=10, pady=5)
+    ast_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=20, width=80)
+    ast_output.grid(row=5, column=0, padx=10, pady=5)
 
     # Parse Table Output
-    tk.Label(root, text="Parse Table:").grid(row=2, column=1, sticky=tk.W, padx=10, pady=5)
-    table_output = scrolledtext.ScrolledText(root, height=10, width=40)
-    table_output.grid(row=3, column=1, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Parse Table:", font=('Helvetica', 12, 'bold')).grid(row=6, column=0, sticky=tk.W, padx=10, pady=5)
+    table_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=15, width=80)
+    table_output.grid(row=7, column=0, padx=10, pady=5)
 
     # Errors Output
-    tk.Label(root, text="Semantic Errors:").grid(row=4, column=0, sticky=tk.W, padx=10, pady=5)
-    error_output = scrolledtext.ScrolledText(root, height=5, width=60, fg="red")
-    error_output.grid(row=5, column=0, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Semantic Errors:", font=('Helvetica', 12, 'bold')).grid(row=8, column=0, sticky=tk.W, padx=10, pady=5)
+    error_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=5, width=80, fg="red")
+    error_output.grid(row=9, column=0, padx=10, pady=5)
 
     # Semantic Analysis Output
-    tk.Label(root, text="Semantic Analysis (Symbol Table):").grid(row=4, column=1, sticky=tk.W, padx=10, pady=5)
-    semantic_output = scrolledtext.ScrolledText(root, height=5, width=40)
-    semantic_output.grid(row=5, column=1, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Semantic Analysis (Symbol Table):", font=('Helvetica', 12, 'bold')).grid(row=10, column=0, sticky=tk.W, padx=10, pady=5)
+    semantic_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=10, width=80)
+    semantic_output.grid(row=11, column=0, padx=10, pady=5)
 
     # Execution Result Output
-    tk.Label(root, text="Execution Result:").grid(row=6, column=0, sticky=tk.W, padx=10, pady=5)
-    execution_output = scrolledtext.ScrolledText(root, height=5, width=60, fg="blue")
-    execution_output.grid(row=7, column=0, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Execution Result:", font=('Helvetica', 12, 'bold')).grid(row=12, column=0, sticky=tk.W, padx=10, pady=5)
+    execution_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=10, width=80, fg="blue")
+    execution_output.grid(row=13, column=0, padx=10, pady=5)
 
     # Buttons
-    button_frame = tk.Frame(root)
-    button_frame.grid(row=8, column=0, columnspan=2, pady=10)
+    button_frame = tk.Frame(scrollable.scrollable_frame)
+    button_frame.grid(row=14, column=0, pady=10)
 
-    tk.Button(button_frame, text="Tokenize", command=tokenize_input).grid(row=0, column=0, padx=5)
-    tk.Button(button_frame, text="Parse & Analyze", command=parse_input).grid(row=0, column=1, padx=5)
-    tk.Button(button_frame, text="Show Parse Table", command=show_parse_table).grid(row=0, column=2, padx=5)
+    tk.Button(button_frame, text="Tokenize", command=tokenize_input, width=15).grid(row=0, column=0, padx=5)
+    tk.Button(button_frame, text="Parse & Analyze", command=parse_input, width=15).grid(row=0, column=1, padx=5)
+    tk.Button(button_frame, text="Show Parse Table", command=show_parse_table, width=15).grid(row=0, column=2, padx=5)
+
+    # Example code with print statements
+    sample_code = """
+// Variable and Array Declarations
+var x: int = 0;
+let y: float = 3.14;
+const z: string = "Hello World";
+array arr: int[5] = {1, 2, 3, 4, 5};
+
+// If-Else Statement
+if (x > 0) {
+    y = y + 1.0;
+} else {
+    y = y - 1.0;
+}
+
+// While Loop
+while (x < 10) {
+    x = x + 1;
+}
+
+// For Loop
+for (var i: int = 0; i < 5; i = i + 1) {
+    // Function Declaration
+    func add(a: int, b: int): int {
+        return a + b;
+    }
+    arr[i] = add(arr[i], x);
+    print(arr[i]);
+}
+
+// Class Declaration
+class Calculator {
+    var result: float;
+
+    func multiply(a: float, b: float): float {
+        return a * b;
+    }
+}
+
+// Try-Catch Statement
+try {
+    var result: float = Calculator.multiply(2.0, 3.5);
+    print(result);
+} catch (e) {
+    // Handle error
+    y = -1.0;
+    print(y);
+}
+
+// Print Statement
+print(x);
+print(y);
+print(z);
+    """
+    
+    input_text.insert(tk.END, sample_code.strip())
 
     root.mainloop()
 

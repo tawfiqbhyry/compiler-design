@@ -67,6 +67,6 @@ The parser raises `ParserError` for any unexpected token encounters, providing u
 2. Save your code into a file named `x.A` in the same directory as this script.
 3. Run the script:
 
-   ```bash
+```bash
    python parser.py
 "# compiler-design" 
