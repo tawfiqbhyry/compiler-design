@@ -1914,8 +1914,8 @@ def GUI():
         for depth in levels:
             max_width[0] = max(max_width[0], len(levels[depth]))
         node_radius = 20
-        x_spacing = 60
-        y_spacing = 80
+        x_spacing = 100
+        y_spacing = 120
 
         for depth, nodes in levels.items():
             for i, node in enumerate(nodes):
@@ -2122,7 +2122,7 @@ def GUI():
                 label = type(node).__name__
 
             # Draw the node as a circle
-            radius = 20
+            radius = 40
             ast_canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline="black")
             # Add text to the node
             ast_canvas.create_text(x, y, text=label, font=("Helvetica", 8), justify=tk.CENTER)
