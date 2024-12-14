@@ -4,7 +4,6 @@ let y: float = 3.14;
 const z: string = "Hello World";
 array arr: int[5] = {1, 2, 3, 4, 5};
 
-
 // If-Else Statement
 if (x > 0) {
     y = y + 1.0;
@@ -24,6 +23,7 @@ for (var i: int = 0; i < 5; i = i + 1) {
         return a + b;
     }
     arr[i] = add(arr[i], x);
+    print(arr[i]);
 }
 
 // Class Declaration
@@ -35,11 +35,20 @@ class Calculator {
     }
 }
 
+// Instantiate the Calculator class
+var calc: Calculator = Calculator();
+
 // Try-Catch Statement
 try {
-    var result: float = Calculator.multiply(2.0, 3.5);
+    var result: float = calc.multiply(2.0, 3.5);
+    print(result);
 } catch (e) {
     // Handle error
     y = -1.0;
+    print(y);
 }
 
+// Print Statement
+print(x);
+print(y);
+print(z);

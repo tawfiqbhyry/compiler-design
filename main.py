@@ -178,6 +178,11 @@ grammar = {
     "ε": []
 }
 
+class ClassInstance:
+    def __init__(self, class_name, class_env):
+        self.class_name = class_name
+        self.attributes = class_env.copy()
+
 def compute_first(grammar):
     first = {non_terminal: set() for non_terminal in grammar}
 
@@ -1505,10 +1510,11 @@ class Backend:
         class_env = {}
         for member in node.members:
             if isinstance(member, VariableDeclaration):
-                class_env[member.name] = self.visit(member.initializer) if member.initializer else None
+                class_env[member.name] = None  # Initialize variables to None or default
             elif isinstance(member, FunctionDeclaration):
                 class_env[member.name] = member
         self.classes[node.name] = class_env
+
 
     def visit_TryCatchStatement(self, node):
         try:
@@ -1522,8 +1528,11 @@ class Backend:
 
     def visit_ReturnStatement(self, node):
         if node.expression:
-            return self.visit(node.expression)
-        return None
+            value = self.visit(node.expression)
+        else:
+            value = None
+        return ReturnValue(value)
+
 
     def visit_PrintStatement(self, node):
         value = self.visit(node.expression)
@@ -1614,19 +1623,29 @@ class Backend:
             obj = self.current_env.get(object_name)
             if obj is None:
                 raise Exception(f"Undefined object '{object_name}'")
-            class_env = self.classes.get(obj.__class__.__name__)
+            class_env = self.classes.get(obj.class_name)
             if class_env is None:
                 raise Exception(f"'{object_name}' is not an instance of a defined class")
             method = class_env.get(method_name)
             if method is None:
-                raise Exception(f"Undefined method '{method_name}' in class '{obj.__class__.__name__}'")
+                raise Exception(f"Undefined method '{method_name}' in class '{object_name}'.")
+            elif method.kind != 'function':
+                raise Exception(f"Identifier '{method_name}' is not a function in class '{object_name}'.")
             return self.execute_method(obj, method, node.arguments)
         else:
-            # Regular function call
-            func = self.functions.get(node.name)
-            if func is None:
-                raise Exception(f"Undefined function '{node.name}'")
-            return self.execute_function(func, node.arguments)
+            # Regular function call or class instantiation
+            if node.name in self.classes:
+                # Class instantiation
+                class_env = self.classes[node.name]
+                instance = ClassInstance(node.name, class_env)
+                return instance
+            else:
+                # Regular function call
+                func = self.functions.get(node.name)
+                if func is None:
+                    raise Exception(f"Undefined function '{node.name}'.")
+                return self.execute_function(func, node.arguments)
+
 
     def execute_function(self, func_node, arguments):
         if len(arguments) != len(func_node.params):
@@ -1675,9 +1694,15 @@ class Backend:
                 result = res.value
                 break
         
+        # Update the object's attributes if any
+        for attr in obj.attributes:
+            if attr in self.current_env:
+                obj.attributes[attr] = self.current_env[attr]
+        
         # Restore the previous environment
         self.current_env = previous_env
         return result
+
 
     def visit_MemberFunctionCall(self, node):
         return self.visit_FunctionCall(node)
