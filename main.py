@@ -440,7 +440,7 @@ class Symbol:
         self.scope = scope  # Scope name where the symbol is declared
         self.declared_at = declared_at  # Tuple (line, column)
         self.class_symbol_table = None  # For classes, to store their members
-    
+
     def __repr__(self):
         return (f"Symbol(name={self.name}, kind={self.kind}, "
                 f"data_type={self.data_type}, scope={self.scope}, "
@@ -1515,7 +1515,6 @@ class Backend:
                 class_env[member.name] = member
         self.classes[node.name] = class_env
 
-
     def visit_TryCatchStatement(self, node):
         try:
             for stmt in node.try_block:
@@ -1532,7 +1531,6 @@ class Backend:
         else:
             value = None
         return ReturnValue(value)
-
 
     def visit_PrintStatement(self, node):
         value = self.visit(node.expression)
@@ -1795,6 +1793,7 @@ def GUI():
                 error_output.insert(tk.END, f"{error}\n")
             semantic_output.delete("1.0", tk.END)  # Clear semantic analysis
             execution_output.delete("1.0", tk.END)  # Clear execution result
+            ast_canvas.delete("all")  # Clear AST visualization
         else:
             error_output.delete("1.0", tk.END)
             # Display Symbol Table as Semantic Analysis
@@ -1806,6 +1805,9 @@ def GUI():
             result = backend.execute()
             execution_output.delete("1.0", tk.END)
             execution_output.insert("1.0", result)
+            # Draw AST on Canvas
+            ast_canvas.delete("all")
+            draw_ast(ast)
 
     def show_parse_table():
         parse_table = create_parse_table(grammar, first_sets, follow_sets)
@@ -1818,6 +1820,313 @@ def GUI():
                     rules_str += f"  {terminal} -> {prod_str}\n"
             table_output.insert(tk.END, f"{non_terminal}:\n{rules_str}\n")
 
+    def draw_ast(ast):
+        # Simple tree layout algorithm
+        levels = {}
+        positions = {}
+        max_width = [0]
+
+        def traverse(node, depth=0, pos=0):
+            if depth not in levels:
+                levels[depth] = []
+            levels[depth].append(node)
+            if isinstance(node, Program):
+                for stmt in node.statements:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, VariableDeclaration):
+                if node.initializer:
+                    traverse(node.initializer, depth + 1)
+            elif isinstance(node, ArrayDeclaration):
+                if node.initializer:
+                    for expr in node.initializer:
+                        traverse(expr, depth + 1)
+            elif isinstance(node, AssignmentStatement):
+                traverse(node.value, depth + 1)
+            elif isinstance(node, ArrayAssignment):
+                traverse(node.index, depth + 1)
+                traverse(node.value, depth + 1)
+            elif isinstance(node, FunctionDeclaration):
+                for stmt in node.body:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, IfStatement):
+                traverse(node.condition, depth + 1)
+                for stmt in node.then_branch:
+                    traverse(stmt, depth + 1)
+                if node.else_branch:
+                    for stmt in node.else_branch:
+                        traverse(stmt, depth + 1)
+            elif isinstance(node, WhileStatement):
+                traverse(node.condition, depth + 1)
+                for stmt in node.body:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, ForStatement):
+                traverse(node.init, depth + 1)
+                traverse(node.condition, depth + 1)
+                traverse(node.increment, depth + 1)
+                for stmt in node.body:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, SwitchStatement):
+                traverse(node.expression, depth + 1)
+                for case in node.cases:
+                    traverse(case, depth + 1)
+                if node.default:
+                    traverse(node.default, depth + 1)
+            elif isinstance(node, Case):
+                traverse(node.expression, depth + 1)
+                for stmt in node.statements:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, DefaultCase):
+                for stmt in node.statements:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, ClassDeclaration):
+                for member in node.members:
+                    traverse(member, depth + 1)
+            elif isinstance(node, TryCatchStatement):
+                for stmt in node.try_block:
+                    traverse(stmt, depth + 1)
+                for stmt in node.catch_block:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, ReturnStatement):
+                if node.expression:
+                    traverse(node.expression, depth + 1)
+            elif isinstance(node, PrintStatement):
+                traverse(node.expression, depth + 1)
+            elif isinstance(node, ExpressionStatement):
+                traverse(node.expression, depth + 1)
+            elif isinstance(node, Block):
+                for stmt in node.statements:
+                    traverse(stmt, depth + 1)
+            elif isinstance(node, BinaryExpression):
+                traverse(node.left, depth + 1)
+                traverse(node.right, depth + 1)
+            elif isinstance(node, UnaryExpression):
+                traverse(node.operand, depth + 1)
+            elif isinstance(node, FunctionCall):
+                for arg in node.arguments:
+                    traverse(arg, depth + 1)
+            elif isinstance(node, ArrayAccess):
+                traverse(node.index, depth + 1)
+            # Add more cases as needed
+
+        traverse(ast)
+
+        # Assign positions
+        for depth in levels:
+            max_width[0] = max(max_width[0], len(levels[depth]))
+        node_radius = 20
+        x_spacing = 60
+        y_spacing = 80
+
+        for depth, nodes in levels.items():
+            for i, node in enumerate(nodes):
+                x = 50 + i * x_spacing
+                y = 50 + depth * y_spacing
+                positions[node] = (x, y)
+
+        # Draw edges
+        def draw_edges(node, depth=0):
+            if isinstance(node, Program):
+                for stmt in node.statements:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, VariableDeclaration):
+                if node.initializer:
+                    draw_edge(node, node.initializer, depth + 1)
+                    draw_edges(node.initializer, depth + 1)
+            elif isinstance(node, ArrayDeclaration):
+                if node.initializer:
+                    for expr in node.initializer:
+                        draw_edge(node, expr, depth + 1)
+                        draw_edges(expr, depth + 1)
+            elif isinstance(node, AssignmentStatement):
+                draw_edge(node, node.value, depth + 1)
+                draw_edges(node.value, depth + 1)
+            elif isinstance(node, ArrayAssignment):
+                draw_edge(node, node.index, depth + 1)
+                draw_edge(node, node.value, depth + 1)
+                draw_edges(node.index, depth + 1)
+                draw_edges(node.value, depth + 1)
+            elif isinstance(node, FunctionDeclaration):
+                for stmt in node.body:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, IfStatement):
+                draw_edge(node, node.condition, depth + 1)
+                for stmt in node.then_branch:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+                if node.else_branch:
+                    for stmt in node.else_branch:
+                        draw_edge(node, stmt, depth + 1)
+                        draw_edges(stmt, depth + 1)
+            elif isinstance(node, WhileStatement):
+                draw_edge(node, node.condition, depth + 1)
+                for stmt in node.body:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, ForStatement):
+                draw_edge(node, node.init, depth + 1)
+                draw_edge(node, node.condition, depth + 1)
+                draw_edge(node, node.increment, depth + 1)
+                for stmt in node.body:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, SwitchStatement):
+                draw_edge(node, node.expression, depth + 1)
+                for case in node.cases:
+                    draw_edge(node, case, depth + 1)
+                    draw_edges(case, depth + 1)
+                if node.default:
+                    draw_edge(node, node.default, depth + 1)
+                    draw_edges(node.default, depth + 1)
+            elif isinstance(node, Case):
+                draw_edge(node, node.expression, depth + 1)
+                for stmt in node.statements:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, DefaultCase):
+                for stmt in node.statements:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, ClassDeclaration):
+                for member in node.members:
+                    draw_edge(node, member, depth + 1)
+                    draw_edges(member, depth + 1)
+            elif isinstance(node, TryCatchStatement):
+                for stmt in node.try_block:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+                for stmt in node.catch_block:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, ReturnStatement):
+                if node.expression:
+                    draw_edge(node, node.expression, depth + 1)
+                    draw_edges(node.expression, depth + 1)
+            elif isinstance(node, PrintStatement):
+                draw_edge(node, node.expression, depth + 1)
+                draw_edges(node.expression, depth + 1)
+            elif isinstance(node, ExpressionStatement):
+                draw_edge(node, node.expression, depth + 1)
+                draw_edges(node.expression, depth + 1)
+            elif isinstance(node, Block):
+                for stmt in node.statements:
+                    draw_edge(node, stmt, depth + 1)
+                    draw_edges(stmt, depth + 1)
+            elif isinstance(node, BinaryExpression):
+                draw_edge(node, node.left, depth + 1)
+                draw_edge(node, node.right, depth + 1)
+                draw_edges(node.left, depth + 1)
+                draw_edges(node.right, depth + 1)
+            elif isinstance(node, UnaryExpression):
+                draw_edge(node, node.operand, depth + 1)
+                draw_edges(node.operand, depth + 1)
+            elif isinstance(node, FunctionCall):
+                for arg in node.arguments:
+                    draw_edge(node, arg, depth + 1)
+                    draw_edges(arg, depth + 1)
+            elif isinstance(node, ArrayAccess):
+                draw_edge(node, node.index, depth + 1)
+                draw_edges(node.index, depth + 1)
+            # Add more cases as needed
+
+        def draw_edge(parent, child, depth):
+            parent_pos = positions.get(parent)
+            child_pos = positions.get(child)
+            if parent_pos and child_pos:
+                ast_canvas.create_line(parent_pos[0], parent_pos[1], child_pos[0], child_pos[1], fill="black")
+
+        draw_edges(ast)
+
+        # Draw nodes
+        for node, (x, y) in positions.items():
+            # Determine node color based on node type
+            if isinstance(node, Program):
+                color = "#FFCCCC"  # Light Red
+                label = "Program"
+            elif isinstance(node, VariableDeclaration):
+                color = "#CCFFCC"  # Light Green
+                label = f"VarDecl\n{node.name}:{node.var_type}"
+            elif isinstance(node, ArrayDeclaration):
+                color = "#CCCCFF"  # Light Blue
+                label = f"ArrayDecl\n{node.name}:{node.var_type}[{node.size}]"
+            elif isinstance(node, AssignmentStatement):
+                color = "#FFFFCC"  # Light Yellow
+                label = f"Assign\n{node.identifier}"
+            elif isinstance(node, ArrayAssignment):
+                color = "#FFCCFF"  # Light Magenta
+                label = f"ArrAssign\n{node.identifier}"
+            elif isinstance(node, FunctionDeclaration):
+                color = "#CCFFFF"  # Light Cyan
+                params_str = ', '.join(f"{name}:{ptype}" for name, ptype in node.params)
+                label = f"FuncDecl\n{node.name}({params_str}) : {node.return_type}"
+            elif isinstance(node, IfStatement):
+                color = "#FFCC99"  # Light Orange
+                label = "IfStatement"
+            elif isinstance(node, WhileStatement):
+                color = "#99CCFF"  # Light Sky Blue
+                label = "WhileStatement"
+            elif isinstance(node, ForStatement):
+                color = "#CC99FF"  # Light Purple
+                label = "ForStatement"
+            elif isinstance(node, SwitchStatement):
+                color = "#FF99CC"  # Light Pink
+                label = "SwitchStatement"
+            elif isinstance(node, Case):
+                color = "#FFFF99"  # Light Yellow
+                label = "Case"
+            elif isinstance(node, DefaultCase):
+                color = "#99FF99"  # Light Lime
+                label = "DefaultCase"
+            elif isinstance(node, ClassDeclaration):
+                color = "#FF9999"  # Light Coral
+                label = f"ClassDecl\n{node.name}"
+            elif isinstance(node, TryCatchStatement):
+                color = "#99FFFF"  # Light Aqua
+                label = "TryCatchStatement"
+            elif isinstance(node, ReturnStatement):
+                color = "#FFD699"  # Light Peach
+                label = "ReturnStatement"
+            elif isinstance(node, PrintStatement):
+                color = "#D9FFB3"  # Light Mint
+                label = "PrintStatement"
+            elif isinstance(node, ExpressionStatement):
+                color = "#B3D9FF"  # Light Steel Blue
+                label = "ExprStatement"
+            elif isinstance(node, Block):
+                color = "#E6E6E6"  # Light Gray
+                label = "Block"
+            elif isinstance(node, BinaryExpression):
+                color = "#FFB3B3"  # Light Salmon
+                label = f"BinaryExpr\n{node.operator}"
+            elif isinstance(node, UnaryExpression):
+                color = "#B3FFB3"  # Light Greenish
+                label = f"UnaryExpr\n{node.operator}"
+            elif isinstance(node, Literal):
+                color = "#FFD1DC"  # Light Pinkish
+                label = f"Literal\n{node.value}"
+            elif isinstance(node, Identifier):
+                color = "#FFFFB3"  # Light Yellow
+                label = f"Identifier\n{node.name}"
+            elif isinstance(node, AssignmentExpression):
+                color = "#B3FFFF"  # Light Cyan
+                label = f"AssignExpr\n{node.identifier}"
+            elif isinstance(node, FunctionCall):
+                color = "#FFB3E6"  # Light Purple Pink
+                label = f"FuncCall\n{node.name}"
+            elif isinstance(node, ArrayAccess):
+                color = "#C2C2D6"  # Light Purple Gray
+                label = f"ArrayAccess\n{node.name}"
+            else:
+                color = "#FFFFFF"  # White for unknown nodes
+                label = type(node).__name__
+
+            # Draw the node as a circle
+            radius = 20
+            ast_canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline="black")
+            # Add text to the node
+            ast_canvas.create_text(x, y, text=label, font=("Helvetica", 8), justify=tk.CENTER)
+
     # Compute FIRST and FOLLOW sets initially
     first_sets = compute_first(grammar)
     follow_sets = compute_follow(grammar, first_sets)
@@ -1825,7 +2134,7 @@ def GUI():
     # GUI
     root = tk.Tk()
     root.title("Compiler Simulation with Semantic Analysis and Execution")
-    root.geometry("700x800")  # Set an initial size; adjust as needed
+    root.geometry("1200x900")  # Set an initial size; adjust as needed
 
     # Create a ScrollableFrame
     scrollable = ScrollableFrame(root)
@@ -1841,34 +2150,45 @@ def GUI():
     token_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=10, width=80, fg="green")
     token_output.grid(row=3, column=0, padx=10, pady=5)
 
-    # AST Output
-    tk.Label(scrollable.scrollable_frame, text="Abstract Syntax Tree (AST):", font=('Helvetica', 12, 'bold')).grid(row=4, column=0, sticky=tk.W, padx=10, pady=5)
+    # AST Output (Text)
+    tk.Label(scrollable.scrollable_frame, text="Abstract Syntax Tree (AST) - Text:", font=('Helvetica', 12, 'bold')).grid(row=4, column=0, sticky=tk.W, padx=10, pady=5)
     ast_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=20, width=80)
     ast_output.grid(row=5, column=0, padx=10, pady=5)
 
+    # AST Visualization
+    tk.Label(scrollable.scrollable_frame, text="Abstract Syntax Tree (AST) - Graphical:", font=('Helvetica', 12, 'bold')).grid(row=6, column=0, sticky=tk.W, padx=10, pady=5)
+    ast_canvas = tk.Canvas(scrollable.scrollable_frame, width=1100, height=600, bg="white", scrollregion=(0,0,2000,2000))
+    ast_canvas.grid(row=7, column=0, padx=10, pady=5)
+    # Add scrollbars to the Canvas
+    ast_scroll_x = tk.Scrollbar(scrollable.scrollable_frame, orient="horizontal", command=ast_canvas.xview)
+    ast_scroll_y = tk.Scrollbar(scrollable.scrollable_frame, orient="vertical", command=ast_canvas.yview)
+    ast_canvas.configure(xscrollcommand=ast_scroll_x.set, yscrollcommand=ast_scroll_y.set)
+    ast_scroll_x.grid(row=8, column=0, sticky='ew', padx=10)
+    ast_scroll_y.grid(row=7, column=1, sticky='ns')
+
     # Parse Table Output
-    tk.Label(scrollable.scrollable_frame, text="Parse Table:", font=('Helvetica', 12, 'bold')).grid(row=6, column=0, sticky=tk.W, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Parse Table:", font=('Helvetica', 12, 'bold')).grid(row=9, column=0, sticky=tk.W, padx=10, pady=5)
     table_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=15, width=80)
-    table_output.grid(row=7, column=0, padx=10, pady=5)
+    table_output.grid(row=10, column=0, padx=10, pady=5)
 
     # Errors Output
-    tk.Label(scrollable.scrollable_frame, text="Semantic Errors:", font=('Helvetica', 12, 'bold')).grid(row=8, column=0, sticky=tk.W, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Semantic Errors:", font=('Helvetica', 12, 'bold')).grid(row=11, column=0, sticky=tk.W, padx=10, pady=5)
     error_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=5, width=80, fg="red")
-    error_output.grid(row=9, column=0, padx=10, pady=5)
+    error_output.grid(row=12, column=0, padx=10, pady=5)
 
     # Semantic Analysis Output
-    tk.Label(scrollable.scrollable_frame, text="Semantic Analysis (Symbol Table):", font=('Helvetica', 12, 'bold')).grid(row=10, column=0, sticky=tk.W, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Semantic Analysis (Symbol Table):", font=('Helvetica', 12, 'bold')).grid(row=13, column=0, sticky=tk.W, padx=10, pady=5)
     semantic_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=10, width=80)
-    semantic_output.grid(row=11, column=0, padx=10, pady=5)
+    semantic_output.grid(row=14, column=0, padx=10, pady=5)
 
     # Execution Result Output
-    tk.Label(scrollable.scrollable_frame, text="Execution Result:", font=('Helvetica', 12, 'bold')).grid(row=12, column=0, sticky=tk.W, padx=10, pady=5)
+    tk.Label(scrollable.scrollable_frame, text="Execution Result:", font=('Helvetica', 12, 'bold')).grid(row=15, column=0, sticky=tk.W, padx=10, pady=5)
     execution_output = scrolledtext.ScrolledText(scrollable.scrollable_frame, height=10, width=80, fg="blue")
-    execution_output.grid(row=13, column=0, padx=10, pady=5)
+    execution_output.grid(row=16, column=0, padx=10, pady=5)
 
     # Buttons
     button_frame = tk.Frame(scrollable.scrollable_frame)
-    button_frame.grid(row=14, column=0, pady=10)
+    button_frame.grid(row=17, column=0, pady=10)
 
     tk.Button(button_frame, text="Tokenize", command=tokenize_input, width=15).grid(row=0, column=0, padx=5)
     tk.Button(button_frame, text="Parse & Analyze", command=parse_input, width=15).grid(row=0, column=1, padx=5)
@@ -1931,6 +2251,9 @@ print(z);
     
     input_text.insert(tk.END, sample_code.strip())
 
+    # Initialize the Canvas with scrollbars
+    ast_canvas.config(scrollregion=ast_canvas.bbox("all"))
+
     root.mainloop()
 
 
@@ -1938,26 +2261,26 @@ print(z);
 if __name__ == "__main__":
     # Uncomment the following lines if you want to run the CLI version
 
-    sample_code = open("x.TEAM", "r", encoding="utf-8").read()
-    print("Tokenizing...\n")
-    tokens = tokenize(sample_code)
-    for token in tokens:
-        print(token)
+    # sample_code = open("x.TEAM", "r", encoding="utf-8").read()
+    # print("Tokenizing...\n")
+    # tokens = tokenize(sample_code)
+    # for token in tokens:
+    #     print(token)
     
-    print("\nParsing...\n")
-    parser = Parser(tokens)
-    ast = parser.parse()
-    ast_text = print_ast(ast)
-    print(ast_text)
+    # print("\nParsing...\n")
+    # parser = Parser(tokens)
+    # ast = parser.parse()
+    # ast_text = print_ast(ast)
+    # print(ast_text)
     
-    print("\nComputing FIRST and FOLLOW sets...\n")
-    first = compute_first(grammar)
-    follow = compute_follow(grammar, first)
-    display_grammar_and_sets(grammar, first, follow)
+    # print("\nComputing FIRST and FOLLOW sets...\n")
+    # first = compute_first(grammar)
+    # follow = compute_follow(grammar, first)
+    # display_grammar_and_sets(grammar, first, follow)
     
-    print("\nSymbol Table:\n")
-    symbol_table_text = print_symbol_table(parser.global_symbol_table)
-    print(symbol_table_text)
+    # print("\nSymbol Table:\n")
+    # symbol_table_text = print_symbol_table(parser.global_symbol_table)
+    # print(symbol_table_text)
     
     print("Launching GUI Simulation...")
     
