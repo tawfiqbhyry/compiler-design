@@ -5,8 +5,9 @@ from tkinter import scrolledtext
 # Define token specifications
 TOKEN_SPECIFICATION = [
     ('COMMENT', r'//[^\n]*'),                                 # Single-line comments
-    ('KEYWORD', r'\b(if|else|while|for|return|function|then|do|break|continue|var|let|const|switch|case|import|export|from|to)\b'),
+    ('KEYWORD', r'\b(if|else|while|for|return|func|then|do|break|continue|var|let|const|switch|case|import|export|from|to|array|class|try|catch|default)\b'),
     ('BOOLEAN', r'\b(true|false)\b'),                         # Boolean values
+    ('TYPE', r'\b(int|float|string|bool|void|array|object)\b'),  # Types
     ('NUMBER', r'\b\d+(\.\d+)?\b'),                           # Integer or floating-point numbers
     ('STRING', r'"[^"\\]*(?:\\.[^"\\]*)*"'),                  # String literals
     ('IDENTIFIER', r'\b[A-Za-z_][A-Za-z_0-9]*\b'),            # Identifiers
@@ -17,27 +18,154 @@ TOKEN_SPECIFICATION = [
     ('RPAREN', r'\)'),                                        # Right parenthesis
     ('LBRACE', r'\{'),                                        # Left brace
     ('RBRACE', r'\}'),                                        # Right brace
+    ('LBRACKET', r'\['),                                      # Left bracket
+    ('RBRACKET', r'\]'),                                      # Right bracket
     ('SEMICOLON', r';'),                                      # Semicolon
     ('COLON', r':'),                                          # Colon
     ('COMMA', r','),                                          # Comma
-    ('WHITESPACE', r'[ \t]+'),                                # Spaces and tabs
+    ('DOT', r'\.'),                                           # Dot
     ('NEWLINE', r'\n'),                                       # Line endings
+    ('WHITESPACE', r'[ \t]+'),                                # Spaces and tabs
 ]
 
 grammar = {
     "Program": [["StatementList"]],
+    "MemberFunctionCall": [
+        ["IDENTIFIER", "DOT", "IDENTIFIER", "LPAREN", "ArgumentList", "RPAREN"]
+    ],
+    "Term": [
+        ["IDENTIFIER"],
+        ["Literal"],
+        ["FunctionCall"],
+        ["MemberFunctionCall"],  # New addition
+        ["ArrayAccess"],
+        ["LPAREN", "Expression", "RPAREN"]
+    ],
     "StatementList": [["Statement", "StatementList"], ["ε"]],
-    "Statement": [["VariableDeclaration"], ["FunctionDeclaration"], ["IfStatement"], ["WhileStatement"]],
-    "VariableDeclaration": [["var", "IDENTIFIER", "ASSIGN", "Expression", "SEMICOLON"],
-                            ["let", "IDENTIFIER", "ASSIGN", "Expression", "SEMICOLON"],
-                            ["const", "IDENTIFIER", "ASSIGN", "Expression", "SEMICOLON"]],
-    "FunctionDeclaration": [["function", "IDENTIFIER", "LPAREN", "ParameterList", "RPAREN", "Block"]],
-    "IfStatement": [["if", "LPAREN", "Expression", "RPAREN", "Block", "else", "Block"]],
-    "WhileStatement": [["while", "LPAREN", "Expression", "RPAREN", "Block"]],
-    "Expression": [["Term", "OPERATOR", "Expression"], ["Term"]],
-    "Term": [["IDENTIFIER"], ["Literal"]],
-    "ParameterList": [["IDENTIFIER", "COMMA", "ParameterList"], ["IDENTIFIER"], ["ε"]],
-    "Block": [["LBRACE", "StatementList", "RBRACE"]],
+    "Statement": [
+        ["VariableDeclaration"],
+        ["ArrayDeclaration"],
+        ["AssignmentStatement"],
+        ["ArrayAssignment"],
+        ["FunctionDeclaration"],
+        ["IfStatement"],
+        ["WhileStatement"],
+        ["ForStatement"],
+        ["SwitchStatement"],
+        ["ClassDeclaration"],
+        ["ReturnStatement"],
+        ["TryCatchStatement"],
+        ["ExpressionStatement"],
+        ["Comment"]
+    ],
+    "VariableDeclaration": [
+        ["var", "IDENTIFIER", "COLON", "TYPE", "SEMICOLON"],
+        ["let", "IDENTIFIER", "COLON", "TYPE", "SEMICOLON"],
+        ["const", "IDENTIFIER", "COLON", "TYPE", "SEMICOLON"],
+        ["var", "IDENTIFIER", "COLON", "TYPE", "ASSIGN", "Expression", "SEMICOLON"],
+        ["let", "IDENTIFIER", "COLON", "TYPE", "ASSIGN", "Expression", "SEMICOLON"],
+        ["const", "IDENTIFIER", "COLON", "TYPE", "ASSIGN", "Expression", "SEMICOLON"]
+    ],
+    "ArrayDeclaration": [
+        ["array", "IDENTIFIER", "COLON", "TYPE", "LBRACKET", "NUMBER", "RBRACKET", "SEMICOLON"],
+        ["array", "IDENTIFIER", "COLON", "TYPE", "LBRACKET", "NUMBER", "RBRACKET", "ASSIGN", "ArrayInitialization", "SEMICOLON"]
+    ],
+    "ArrayInitialization": [
+        ["LBRACE", "ExpressionList", "RBRACE"]
+    ],
+    "AssignmentStatement": [
+        ["IDENTIFIER", "ASSIGN", "Expression", "SEMICOLON"]
+    ],
+    "ArrayAssignment": [
+        ["IDENTIFIER", "LBRACKET", "Expression", "RBRACKET", "ASSIGN", "Expression", "SEMICOLON"]
+    ],
+    "FunctionDeclaration": [
+        ["func", "IDENTIFIER", "LPAREN", "ParameterList", "RPAREN", "COLON", "TYPE", "LBRACE", "StatementList", "RBRACE"]
+    ],
+    "IfStatement": [
+        ["if", "LPAREN", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE", "else", "LBRACE", "StatementList", "RBRACE"],
+        ["if", "LPAREN", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
+    ],
+    "WhileStatement": [
+        ["while", "LPAREN", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
+    ],
+    "ForStatement": [
+        ["for", "LPAREN", "AssignmentStatement", "Expression", "SEMICOLON", "Expression", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
+    ],
+    "SwitchStatement": [
+        ["switch", "LPAREN", "Expression", "RPAREN", "LBRACE", "CaseList", "DefaultCase", "RBRACE"],
+        ["switch", "LPAREN", "Expression", "RPAREN", "LBRACE", "CaseList", "RBRACE"]
+    ],
+    "CaseList": [
+        ["Case", "CaseList"],
+        ["Case"]
+    ],
+    "Case": [
+        ["case", "Expression", "COLON", "StatementList"]
+    ],
+    "DefaultCase": [
+        ["default", "COLON", "StatementList"]
+    ],
+    "ClassDeclaration": [
+        ["class", "IDENTIFIER", "LBRACE", "ClassBody", "RBRACE"]
+    ],
+    "ClassBody": [
+        ["ClassMember", "ClassBody"],
+        ["ClassMember"]
+    ],
+    "ClassMember": [
+        ["VariableDeclaration"],
+        ["FunctionDeclaration"]
+    ],
+    "TryCatchStatement": [
+        ["try", "LBRACE", "StatementList", "RBRACE", "catch", "LPAREN", "IDENTIFIER", "RPAREN", "LBRACE", "StatementList", "RBRACE"]
+    ],
+    "ExpressionStatement": [
+        ["Expression", "SEMICOLON"]
+    ],
+    "Expression": [
+        ["Expression", "OPERATOR", "Expression"],
+        ["Term"]
+    ],
+    "Term": [
+        ["IDENTIFIER"],
+        ["Literal"],
+        ["FunctionCall"],
+        ["ArrayAccess"],
+        ["LPAREN", "Expression", "RPAREN"]
+    ],
+    "FunctionCall": [
+        ["IDENTIFIER", "LPAREN", "ArgumentList", "RPAREN"]
+    ],
+    "ArrayAccess": [
+        ["IDENTIFIER", "LBRACKET", "Expression", "RBRACKET"]
+    ],
+    "ParameterList": [
+        ["Parameter", "COMMA", "ParameterList"],
+        ["Parameter"]
+    ],
+    "Parameter": [
+        ["IDENTIFIER", "COLON", "TYPE"]
+    ],
+    "ArgumentList": [
+        ["Expression", "COMMA", "ArgumentList"],
+        ["Expression"],
+        ["ε"]
+    ],
+    "ExpressionList": [
+        ["Expression", "COMMA", "ExpressionList"],
+        ["Expression"],
+        ["ε"]
+    ],
+    "Literal": [
+        ["NUMBER"],
+        ["STRING"],
+        ["BOOLEAN"]
+    ],
+    "Comment": [
+        ["COMMENT"]
+    ],
+    "ε": []
 }
 
 def compute_first(grammar):
@@ -69,6 +197,16 @@ def compute_follow(grammar, first):
     follow = {non_terminal: set() for non_terminal in grammar}
     follow["Program"].add("$")  # Assuming Program is the start symbol
 
+    def first_of_sequence(sequence):
+        result = set()
+        for symbol in sequence:
+            result.update(first.get(symbol, {symbol}))
+            if "ε" not in first.get(symbol, {symbol}):
+                break
+        else:
+            result.add("ε")
+        return result
+
     changed = True
     while changed:
         changed = False
@@ -81,32 +219,23 @@ def compute_follow(grammar, first):
 
                         # Add FIRST of next_symbols to FOLLOW of symbol
                         follow[symbol].update(
-                            first_of_sequence(next_symbols, first)
+                            first_of_sequence(next_symbols)
                         )
 
                         # If next_symbols derive ε, add FOLLOW of current non-terminal
-                        if "ε" in first_of_sequence(next_symbols, first):
+                        if "ε" in first_of_sequence(next_symbols):
                             follow[symbol].update(follow[non_terminal])
 
                         if len(follow[symbol]) > before:
                             changed = True
     return follow
 
-def first_of_sequence(sequence, first):
-    result = set()
-    for symbol in sequence:
-        result.update(first.get(symbol, {symbol}))
-        if "ε" not in first.get(symbol, {symbol}):
-            break
-    else:
-        result.add("ε")
-    return result
-
-
 def display_grammar_and_sets(grammar, first, follow):
     print("Grammar (BNF):")
     for non_terminal, productions in grammar.items():
-        print(f"{non_terminal} ::= {' | '.join(' '.join(p) for p in productions)}")
+        productions_str = ' | '.join(' '.join(p) for p in productions if p != ["ε"])
+        epsilon = ' | ε' if any(p == ["ε"] for p in productions) else ''
+        print(f"{non_terminal} ::= {productions_str}{epsilon}")
 
     print("\nFIRST Sets:")
     for non_terminal, first_set in first.items():
@@ -115,7 +244,6 @@ def display_grammar_and_sets(grammar, first, follow):
     print("\nFOLLOW Sets:")
     for non_terminal, follow_set in follow.items():
         print(f"FOLLOW({non_terminal}) = {{ {', '.join(follow_set)} }}")
-
 
 # Compile regex
 TOKENS_RE = '|'.join(f'(?P<{pair[0]}>{pair[1]})' for pair in TOKEN_SPECIFICATION)
@@ -141,14 +269,17 @@ def tokenize(code):
         value = mo.group(kind)
         column = mo.start() - line_start
         if kind == 'WHITESPACE' or kind == 'COMMENT':
-            continue
+            pass  # Ignore whitespace and comments
         elif kind == 'NEWLINE':
             line_num += 1
             line_start = mo.end()
-            continue
         elif kind == 'STRING':
             value = value[1:-1]  # Remove surrounding quotes
-        tokens.append(Token(kind, value, line_num, column))
+            tokens.append(Token(kind, value, line_num, column))
+        elif kind == 'NUMBER':
+            tokens.append(Token(kind, float(value) if '.' in value else int(value), line_num, column))
+        else:
+            tokens.append(Token(kind, value, line_num, column))
     return tokens
 
 # AST Node classes
@@ -160,19 +291,39 @@ class Program(ASTNode):
         self.statements = statements
 
 class VariableDeclaration(ASTNode):
-    def __init__(self, kind, name, initializer):
+    def __init__(self, kind, name, var_type, initializer=None):
         self.kind = kind  # 'var', 'let', or 'const'
         self.name = name
+        self.var_type = var_type
         self.initializer = initializer
 
-class FunctionDeclaration(ASTNode):
-    def __init__(self, name, params, body):
+class ArrayDeclaration(ASTNode):
+    def __init__(self, name, var_type, size, initializer=None):
         self.name = name
-        self.params = params
+        self.var_type = var_type
+        self.size = size
+        self.initializer = initializer
+
+class AssignmentStatement(ASTNode):
+    def __init__(self, identifier, value):
+        self.identifier = identifier
+        self.value = value
+
+class ArrayAssignment(ASTNode):
+    def __init__(self, identifier, index, value):
+        self.identifier = identifier
+        self.index = index
+        self.value = value
+
+class FunctionDeclaration(ASTNode):
+    def __init__(self, name, params, return_type, body):
+        self.name = name
+        self.params = params  # List of tuples (name, type)
+        self.return_type = return_type
         self.body = body
 
 class IfStatement(ASTNode):
-    def __init__(self, condition, then_branch, else_branch):
+    def __init__(self, condition, then_branch, else_branch=None):
         self.condition = condition
         self.then_branch = then_branch
         self.else_branch = else_branch
@@ -182,8 +333,41 @@ class WhileStatement(ASTNode):
         self.condition = condition
         self.body = body
 
+class ForStatement(ASTNode):
+    def __init__(self, init, condition, increment, body):
+        self.init = init
+        self.condition = condition
+        self.increment = increment
+        self.body = body
+
+class SwitchStatement(ASTNode):
+    def __init__(self, expression, cases, default=None):
+        self.expression = expression
+        self.cases = cases  # List of tuples (expression, statements)
+        self.default = default  # List of statements
+
+class Case(ASTNode):
+    def __init__(self, expression, statements):
+        self.expression = expression
+        self.statements = statements
+
+class DefaultCase(ASTNode):
+    def __init__(self, statements):
+        self.statements = statements
+
+class ClassDeclaration(ASTNode):
+    def __init__(self, name, members):
+        self.name = name
+        self.members = members  # List of VariableDeclaration or FunctionDeclaration
+
+class TryCatchStatement(ASTNode):
+    def __init__(self, try_block, catch_identifier, catch_block):
+        self.try_block = try_block
+        self.catch_identifier = catch_identifier
+        self.catch_block = catch_block
+
 class ReturnStatement(ASTNode):
-    def __init__(self, expression):
+    def __init__(self, expression=None):
         self.expression = expression
 
 class ExpressionStatement(ASTNode):
@@ -223,15 +407,22 @@ class FunctionCall(ASTNode):
         self.name = name
         self.arguments = arguments
 
+class ArrayAccess(ASTNode):
+    def __init__(self, name, index):
+        self.name = name
+        self.index = index
+
+# Symbol class with comprehensive attributes
 # Symbol class with comprehensive attributes
 class Symbol:
     def __init__(self, name, kind, data_type=None, scope=None, declared_at=None):
         self.name = name
-        self.kind = kind  # 'variable', 'function', or 'parameter'
+        self.kind = kind  # 'variable', 'function', 'parameter', 'class'
         self.data_type = data_type  # Optional: can be inferred or set to None
         self.scope = scope  # Scope name where the symbol is declared
         self.declared_at = declared_at  # Tuple (line, column)
-
+        self.class_symbol_table = None  # For classes, to store their members
+    
     def __repr__(self):
         return (f"Symbol(name={self.name}, kind={self.kind}, "
                 f"data_type={self.data_type}, scope={self.scope}, "
@@ -310,16 +501,38 @@ class Parser:
 
     def statement(self):
         if self.current_token.type == 'KEYWORD':
-            if self.current_token.value in ('var', 'let', 'const'):
+            keyword = self.current_token.value
+            if keyword in ('var', 'let', 'const'):
                 return self.variable_declaration()
-            elif self.current_token.value == 'function':
+            elif keyword == 'array':
+                return self.array_declaration()
+            elif keyword == 'func':
                 return self.function_declaration()
-            elif self.current_token.value == 'if':
+            elif keyword == 'if':
                 return self.if_statement()
-            elif self.current_token.value == 'while':
+            elif keyword == 'while':
                 return self.while_statement()
-            elif self.current_token.value == 'return':
+            elif keyword == 'for':
+                return self.for_statement()
+            elif keyword == 'switch':
+                return self.switch_statement()
+            elif keyword == 'class':
+                return self.class_declaration()
+            elif keyword == 'return':
                 return self.return_statement()
+            elif keyword == 'try':
+                return self.try_catch_statement()
+            else:
+                return self.expression_statement()
+        elif self.current_token.type == 'IDENTIFIER':
+            # Could be assignment or function call or member function call
+            next_token = self.peek_next()
+            if next_token and next_token.type == 'ASSIGN':
+                return self.assignment_statement()
+            elif next_token and next_token.type == 'LBRACKET':
+                return self.array_assignment()
+            elif next_token and next_token.type == 'DOT':
+                return self.expression_statement()  # Handle member function call within expression
             else:
                 return self.expression_statement()
         else:
@@ -330,70 +543,199 @@ class Parser:
         self.consume('KEYWORD')  # Consume 'var', 'let', or 'const'
         if self.current_token and self.current_token.type == 'IDENTIFIER':
             var_name = self.current_token.value
-            declared_at = (self.current_token.line, self.current_token.column)
-            # Attempt to define the variable in the current symbol table
-            if not self.symbol_table.define(var_name, 'variable', declared_at=declared_at):
-                self.error(f"Variable '{var_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
             self.consume('IDENTIFIER')
+            if not self.consume('COLON'):
+                return None
+            if self.current_token and self.current_token.type == 'TYPE':
+                var_type = self.current_token.value
+                self.consume('TYPE')
+            else:
+                var_type = None
+                self.error("Expected type in variable declaration.")
             initializer = None
             if self.current_token and self.current_token.type == 'ASSIGN':
                 self.consume('ASSIGN')
                 initializer = self.expression()
             if not self.consume('SEMICOLON'):
                 return None
-            return VariableDeclaration(kind, var_name, initializer)
+            # Attempt to define the variable in the current symbol table
+            declared_at = (self.current_token.line, self.current_token.column) if self.current_token else (0, 0)
+            if not self.symbol_table.define(var_name, 'variable', data_type=var_type, declared_at=declared_at):
+                self.error(f"Variable '{var_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
+            return VariableDeclaration(kind, var_name, var_type, initializer)
         else:
             self.error("Expected identifier in variable declaration.")
             return None
 
+    def array_declaration(self):
+        self.consume('KEYWORD')  # 'array'
+        if self.current_token and self.current_token.type == 'IDENTIFIER':
+            array_name = self.current_token.value
+            self.consume('IDENTIFIER')
+            if not self.consume('COLON'):
+                return None
+            if self.current_token and self.current_token.type == 'TYPE':
+                array_type = self.current_token.value
+                self.consume('TYPE')
+            else:
+                array_type = None
+                self.error("Expected type in array declaration.")
+            if not self.consume('LBRACKET'):
+                return None
+            if self.current_token and self.current_token.type == 'NUMBER':
+                size = self.current_token.value
+                self.consume('NUMBER')
+            else:
+                size = None
+                self.error("Expected size in array declaration.")
+            if not self.consume('RBRACKET'):
+                return None
+            initializer = None
+            if self.current_token and self.current_token.type == 'ASSIGN':
+                self.consume('ASSIGN')
+                initializer = self.array_initialization()
+            if not self.consume('SEMICOLON'):
+                return None
+            # Attempt to define the array in the current symbol table
+            declared_at = (self.current_token.line, self.current_token.column) if self.current_token else (0, 0)
+            if not self.symbol_table.define(array_name, 'array', data_type=array_type, declared_at=declared_at):
+                self.error(f"Array '{array_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
+            return ArrayDeclaration(array_name, array_type, size, initializer)
+        else:
+            self.error("Expected identifier in array declaration.")
+            return None
+
+    def array_initialization(self):
+        if not self.consume('LBRACE'):
+            return None
+        expressions = self.expression_list()
+        if not self.consume('RBRACE'):
+            return None
+        return expressions
+
+    def assignment_statement(self):
+        if self.current_token.type == 'IDENTIFIER':
+            identifier = self.current_token.value
+            self.consume('IDENTIFIER')
+            if not self.consume('ASSIGN'):
+                return None
+            value = self.expression()
+            if not self.consume('SEMICOLON'):
+                return None
+            # Check if the identifier is defined
+            symbol = self.symbol_table.lookup(identifier)
+            if not symbol:
+                self.error(f"Assignment to undeclared variable '{identifier}'.")
+            return AssignmentStatement(identifier, value)
+        else:
+            self.error("Expected identifier in assignment.")
+            return None
+
+    def array_assignment(self):
+        if self.current_token.type == 'IDENTIFIER':
+            array_name = self.current_token.value
+            self.consume('IDENTIFIER')
+            if not self.consume('LBRACKET'):
+                return None
+            index = self.expression()
+            if not self.consume('RBRACKET'):
+                return None
+            if not self.consume('ASSIGN'):
+                return None
+            value = self.expression()
+            if not self.consume('SEMICOLON'):
+                return None
+            # Check if the array is defined
+            symbol = self.symbol_table.lookup(array_name)
+            if not symbol:
+                self.error(f"Assignment to undeclared array '{array_name}'.")
+            return ArrayAssignment(array_name, index, value)
+        else:
+            self.error("Expected identifier in array assignment.")
+            return None
+
     def function_declaration(self):
-        self.consume('KEYWORD')  # 'function'
+        self.consume('KEYWORD')  # 'func'
         if self.current_token and self.current_token.type == 'IDENTIFIER':
             func_name = self.current_token.value
-            declared_at = (self.current_token.line, self.current_token.column)
-            # Attempt to define the function in the current symbol table
-            if not self.symbol_table.define(func_name, 'function', declared_at=declared_at):
-                self.error(f"Function '{func_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
+            func_decl_token = self.current_token  # Capture the token for position
             self.consume('IDENTIFIER')
-            self.consume('LPAREN')
+            if not self.consume('LPAREN'):
+                return None
             params = self.parameter_list()
-            param_names = [name for name, _ in params]
-            self.consume('RPAREN')
+            if not self.consume('RPAREN'):
+                return None
+            if not self.consume('COLON'):
+                return None
+            if self.current_token and self.current_token.type == 'TYPE':
+                return_type = self.current_token.value
+                self.consume('TYPE')
+            else:
+                return_type = None
+                self.error("Expected return type in function declaration.")
+            if not self.consume('LBRACE'):
+                return None
+            
+            # **Define the function in the current symbol table before parsing the body**
+            declared_at = (func_decl_token.line, func_decl_token.column)
+            if not self.symbol_table.define(func_name, 'function', data_type=return_type, declared_at=declared_at):
+                self.error(f"Function '{func_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
+            
             # Define a new scope for the function body
             func_scope_name = f"function {func_name}"
             self.symbol_table = SymbolTable(parent=self.symbol_table, scope_name=func_scope_name)
+            
             # Define parameters in the function's symbol table
-            for param_name, param_token in params:
-                param_declared_at = (param_token.line, param_token.column)
-                if not self.symbol_table.define(param_name, 'parameter', declared_at=param_declared_at):
+            for param_name, param_type in params:
+                if not self.symbol_table.define(param_name, 'parameter', data_type=param_type, declared_at=(self.current_token.line, self.current_token.column)):
                     self.error(f"Parameter '{param_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
+            
             # Parse the function body
-            body = self.block(scope_name=func_scope_name)
+            body = self.statement_list()
+            if not self.consume('RBRACE'):
+                return None
+            
             # Restore the previous symbol table
             self.symbol_table = self.symbol_table.parent
-            return FunctionDeclaration(func_name, param_names, body)
+            return FunctionDeclaration(func_name, params, return_type, body)
         else:
             self.error("Expected function name.")
             return None
 
+
     def parameter_list(self):
         params = []
-        while self.current_token and self.current_token.type == 'IDENTIFIER':
-            param_name = self.current_token.value
-            param_token = self.current_token
-            params.append((param_name, param_token))
-            self.consume('IDENTIFIER')
-            if self.current_token and self.current_token.type == 'COMMA':
+        if self.current_token and self.current_token.type == 'IDENTIFIER':
+            param = self.parameter()
+            params.append(param)
+            while self.current_token and self.current_token.type == 'COMMA':
                 self.consume('COMMA')
-            else:
-                break
+                param = self.parameter()
+                params.append(param)
         return params
 
-    def block(self, scope_name="block"):
+    def parameter(self):
+        if self.current_token.type == 'IDENTIFIER':
+            param_name = self.current_token.value
+            self.consume('IDENTIFIER')
+            if not self.consume('COLON'):
+                return (param_name, None)
+            if self.current_token and self.current_token.type == 'TYPE':
+                param_type = self.current_token.value
+                self.consume('TYPE')
+                return (param_name, param_type)
+            else:
+                self.error("Expected type in parameter.")
+                return (param_name, None)
+        else:
+            self.error("Expected identifier in parameter.")
+            return (None, None)
+
+    def block(self):
         if not self.consume('LBRACE'):
             return None
         # Create a new symbol table for the block
-        self.symbol_table = SymbolTable(parent=self.symbol_table, scope_name=scope_name)
+        self.symbol_table = SymbolTable(parent=self.symbol_table, scope_name="block")
         statements = self.statement_list()
         if not self.consume('RBRACE'):
             return None
@@ -403,23 +745,209 @@ class Parser:
 
     def if_statement(self):
         self.consume('KEYWORD')  # 'if'
-        self.consume('LPAREN')
+        if not self.consume('LPAREN'):
+            return None
         condition = self.expression()
-        self.consume('RPAREN')
-        then_branch = self.block(scope_name="if")
+        if not self.consume('RPAREN'):
+            return None
+        if not self.consume('LBRACE'):
+            return None
+        then_branch = self.statement_list()
+        if not self.consume('RBRACE'):
+            return None
         else_branch = None
         if self.current_token and self.current_token.type == 'KEYWORD' and self.current_token.value == 'else':
             self.consume('KEYWORD')  # 'else'
-            else_branch = self.block(scope_name="else")
+            if not self.consume('LBRACE'):
+                return None
+            else_branch = self.statement_list()
+            if not self.consume('RBRACE'):
+                return None
         return IfStatement(condition, then_branch, else_branch)
 
     def while_statement(self):
         self.consume('KEYWORD')  # 'while'
-        self.consume('LPAREN')
+        if not self.consume('LPAREN'):
+            return None
         condition = self.expression()
-        self.consume('RPAREN')
-        body = self.block(scope_name="while")
+        if not self.consume('RPAREN'):
+            return None
+        if not self.consume('LBRACE'):
+            return None
+        body = self.statement_list()
+        if not self.consume('RBRACE'):
+            return None
         return WhileStatement(condition, body)
+
+    def for_statement(self):
+        self.consume('KEYWORD')  # 'for'
+        if not self.consume('LPAREN'):
+            return None
+
+        if self.current_token and self.current_token.type == 'KEYWORD' and self.current_token.value in ('var', 'let', 'const'):
+            init = self.variable_declaration()
+        elif self.current_token and self.current_token.type == 'IDENTIFIER':
+            init = self.assignment_statement()
+        else:
+            self.error("Expected VariableDeclaration or AssignmentStatement in for loop initialization.")
+            return None
+        
+        condition = self.expression()
+        
+        if not self.consume('SEMICOLON'):
+            return None
+        
+        increment = self.expression()
+        
+        if not self.consume('RPAREN'):
+            return None
+        
+        if not self.consume('LBRACE'):
+            return None
+        
+        body = self.statement_list()
+        
+        if not self.consume('RBRACE'):
+            return None
+        
+        return ForStatement(init, condition, increment, body)
+
+    def switch_statement(self):
+        self.consume('KEYWORD')  # 'switch'
+        if not self.consume('LPAREN'):
+            return None
+        expression = self.expression()
+        if not self.consume('RPAREN'):
+            return None
+        if not self.consume('LBRACE'):
+            return None
+        cases = []
+        default = None
+        while self.current_token and self.current_token.type != 'RBRACE':
+            if self.current_token.type == 'KEYWORD' and self.current_token.value == 'case':
+                case = self.case_statement()
+                if case:
+                    cases.append(case)
+            elif self.current_token.type == 'KEYWORD' and self.current_token.value == 'default':
+                default = self.default_case()
+            else:
+                self.error("Expected 'case' or 'default' in switch statement.")
+                break
+        if not self.consume('RBRACE'):
+            return None
+        return SwitchStatement(expression, cases, default)
+
+    def case_statement(self):
+        self.consume('KEYWORD')  # 'case'
+        expr = self.expression()
+        if not self.consume('COLON'):
+            return None
+        statements = self.statement_list()
+        return Case(expr, statements)
+
+    def default_case(self):
+        self.consume('KEYWORD')  # 'default'
+        if not self.consume('COLON'):
+            return None
+        statements = self.statement_list()
+        return DefaultCase(statements)
+
+    def class_declaration(self):
+        self.consume('KEYWORD')  # 'class'
+        if self.current_token and self.current_token.type == 'IDENTIFIER':
+            class_name = self.current_token.value
+            class_decl_token = self.current_token  # Capture the token for position
+            self.consume('IDENTIFIER')
+            if not self.consume('LBRACE'):
+                return None
+            members = self.class_body()
+            if not self.consume('RBRACE'):
+                return None
+            # Define the class in the current symbol table
+            declared_at = (class_decl_token.line, class_decl_token.column)
+            if not self.symbol_table.define(class_name, 'class', declared_at=declared_at):
+                self.error(f"Class '{class_name}' is already declared in scope '{self.symbol_table.scope_name}'.")
+            # Retrieve the class symbol and create its symbol table
+            class_symbol = self.symbol_table.lookup(class_name)
+            class_symbol.class_symbol_table = SymbolTable(parent=None, scope_name=f"class {class_name}")
+            # Populate the class's symbol table with its members
+            for member in members:
+                if isinstance(member, FunctionDeclaration):
+                    # Define method in class's symbol table
+                    if not class_symbol.class_symbol_table.define(member.name, 'function', data_type=member.return_type, declared_at=(0,0)):
+                        self.error(f"Method '{member.name}' is already declared in class '{class_name}'.")
+                elif isinstance(member, VariableDeclaration):
+                    if not class_symbol.class_symbol_table.define(member.name, 'variable', data_type=member.var_type, declared_at=(0,0)):
+                        self.error(f"Variable '{member.name}' is already declared in class '{class_name}'.")
+            return ClassDeclaration(class_name, members)
+        else:
+            self.error("Expected class name.")
+            return None
+
+
+    def class_body(self):
+        members = []
+        while self.current_token and self.current_token.type != 'RBRACE':
+            member = self.class_member()
+            if member:
+                members.append(member)
+        return members
+
+    def class_member(self):
+        if self.current_token.type == 'KEYWORD':
+            keyword = self.current_token.value
+            if keyword in ('var', 'let', 'const'):
+                return self.variable_declaration()
+            elif keyword == 'func':
+                return self.function_declaration()
+            else:
+                self.error(f"Unexpected keyword '{keyword}' in class body.")
+                self.consume(self.current_token.type)
+                return None
+        else:
+            self.error("Expected member declaration in class.")
+            return None
+
+    def try_catch_statement(self):
+        self.consume('KEYWORD')  # 'try'
+        if not self.consume('LBRACE'):
+            return None
+        # **Create a new scope for the try block**
+        self.symbol_table = SymbolTable(parent=self.symbol_table, scope_name="try")
+        try_block = self.statement_list()
+        if not self.consume('RBRACE'):
+            return None
+        if not (self.current_token and self.current_token.type == 'KEYWORD' and self.current_token.value == 'catch'):
+            self.error("Expected 'catch' after 'try' block.")
+            return None
+        self.consume('KEYWORD')  # 'catch'
+        if not self.consume('LPAREN'):
+            return None
+        if self.current_token and self.current_token.type == 'IDENTIFIER':
+            catch_identifier = self.current_token.value
+            declared_at = (self.current_token.line, self.current_token.column)  # Capture before consuming
+            self.consume('IDENTIFIER')
+        else:
+            catch_identifier = None
+            declared_at = (0, 0)  # Default or previous token's position can be used
+            self.error("Expected identifier in catch clause.")
+        if not self.consume('RPAREN'):
+            return None
+        if not self.consume('LBRACE'):
+            return None
+        # **Create a new scope for the catch block**
+        self.symbol_table = SymbolTable(parent=self.symbol_table, scope_name="catch")
+        # Define the catch identifier in the symbol table if it exists
+        if catch_identifier:
+            if not self.symbol_table.define(catch_identifier, 'parameter', data_type=None, declared_at=declared_at):
+                self.error(f"Identifier '{catch_identifier}' is already declared in scope '{self.symbol_table.scope_name}'.")
+        catch_block = self.statement_list()
+        if not self.consume('RBRACE'):
+            return None
+        # Restore the previous symbol table
+        self.symbol_table = self.symbol_table.parent.parent  # Exit 'catch' and 'try' scopes
+        return TryCatchStatement(try_block, catch_identifier, catch_block)
+
 
     def return_statement(self):
         self.consume('KEYWORD')  # 'return'
@@ -524,7 +1052,7 @@ class Parser:
             return None
         if token.type == 'NUMBER':
             self.consume('NUMBER')
-            return Literal(float(token.value) if '.' in token.value else int(token.value))
+            return Literal(token.value)
         elif token.type == 'STRING':
             self.consume('STRING')
             return Literal(token.value)
@@ -532,8 +1060,13 @@ class Parser:
             self.consume('BOOLEAN')
             return Literal(True if token.value == 'true' else False)
         elif token.type == 'IDENTIFIER':
-            if self.peek_next() and self.peek_next().type == 'LPAREN':
+            next_token = self.peek_next()
+            if next_token and next_token.type == 'LPAREN':
                 return self.function_call()
+            elif next_token and next_token.type == 'DOT':
+                return self.member_function_call()  # Handle member function call
+            elif next_token and next_token.type == 'LBRACKET':
+                return self.array_access()
             else:
                 identifier_name = token.value
                 # Check if the identifier is defined
@@ -545,19 +1078,23 @@ class Parser:
         elif token.type == 'LPAREN':
             self.consume('LPAREN')
             expr = self.expression()
-            self.consume('RPAREN')
+            if not self.consume('RPAREN'):
+                return None
             return expr
         else:
             self.error("Unexpected token in expression.")
             self.consume(token.type)  # Attempt to recover
             return None
 
+
     def function_call(self):
         func_name = self.current_token.value
         self.consume('IDENTIFIER')
-        self.consume('LPAREN')
+        if not self.consume('LPAREN'):
+            return None
         args = self.argument_list()
-        self.consume('RPAREN')
+        if not self.consume('RPAREN'):
+            return None
         # Check if the function is defined
         symbol = self.symbol_table.lookup(func_name)
         if not symbol:
@@ -565,6 +1102,21 @@ class Parser:
         elif symbol.kind != 'function':
             self.error(f"Identifier '{func_name}' is not a function.")
         return FunctionCall(func_name, args)
+
+
+    def array_access(self):
+        array_name = self.current_token.value
+        self.consume('IDENTIFIER')
+        if not self.consume('LBRACKET'):
+            return None
+        index = self.expression()
+        if not self.consume('RBRACKET'):
+            return None
+        # Check if the array is defined
+        symbol = self.symbol_table.lookup(array_name)
+        if not symbol:
+            self.error(f"Access to undeclared array '{array_name}'.")
+        return ArrayAccess(array_name, index)
 
     def argument_list(self):
         args = []
@@ -575,11 +1127,49 @@ class Parser:
                 args.append(self.expression())
         return args
 
+    def expression_list(self):
+        exprs = []
+        if self.current_token and self.current_token.type != 'RBRACE':
+            exprs.append(self.expression())
+            while self.current_token and self.current_token.type == 'COMMA':
+                self.consume('COMMA')
+                exprs.append(self.expression())
+        return exprs
+
     def peek_next(self):
         if self.pos + 1 < len(self.tokens):
             return self.tokens[self.pos + 1]
         else:
             return None
+
+    def member_function_call(self):
+        object_name = self.current_token.value
+        self.consume('IDENTIFIER')
+        if not self.consume('DOT'):
+            return None
+        func_name = self.current_token.value
+        self.consume('IDENTIFIER')
+        if not self.consume('LPAREN'):
+            return None
+        args = self.argument_list()
+        if not self.consume('RPAREN'):
+            return None
+        # Check if the object is defined and has the method
+        obj_symbol = self.symbol_table.lookup(object_name)
+        if not obj_symbol:
+            self.error(f"Call to method '{func_name}' on undeclared object '{object_name}'.")
+        elif obj_symbol.kind != 'class':
+            self.error(f"Identifier '{object_name}' is not a class.")
+        else:
+            # Look up the method within the class's symbol table
+            class_symbol_table = obj_symbol.class_symbol_table  # Assuming class symbols have their own symbol tables
+            method_symbol = class_symbol_table.lookup(func_name) if class_symbol_table else None
+            if not method_symbol:
+                self.error(f"Call to undeclared method '{func_name}' of class '{object_name}'.")
+            elif method_symbol.kind != 'function':
+                self.error(f"Identifier '{func_name}' is not a function in class '{object_name}'.")
+        return FunctionCall(f"{object_name}.{func_name}", args)
+
 
 # AST Printer for visualization
 def print_ast(node, indent=0):
@@ -592,12 +1182,28 @@ def print_ast(node, indent=0):
             result += print_ast(stmt, indent + 1)
         return result
     elif isinstance(node, VariableDeclaration):
-        result += f"{prefix}VariableDeclaration ({node.kind}): {node.name}\n"
+        result += f"{prefix}VariableDeclaration ({node.kind}) : {node.name} : {node.var_type}\n"
         if node.initializer:
             result += print_ast(node.initializer, indent + 1)
         return result
+    elif isinstance(node, ArrayDeclaration):
+        result += f"{prefix}ArrayDeclaration: {node.name} : {node.var_type}[{node.size}]\n"
+        if node.initializer:
+            result += print_ast(node.initializer, indent + 1)
+        return result
+    elif isinstance(node, AssignmentStatement):
+        result += f"{prefix}Assignment: {node.identifier} =\n"
+        result += print_ast(node.value, indent + 1)
+        return result
+    elif isinstance(node, ArrayAssignment):
+        result += f"{prefix}ArrayAssignment: {node.identifier}[\n"
+        result += print_ast(node.index, indent + 2)
+        result += f"{prefix}] =\n"
+        result += print_ast(node.value, indent + 2)
+        return result
     elif isinstance(node, FunctionDeclaration):
-        result += f"{prefix}FunctionDeclaration: {node.name} Params: {', '.join(node.params)}\n"
+        params_str = ', '.join(f"{name}:{ptype}" for name, ptype in node.params)
+        result += f"{prefix}FunctionDeclaration: {node.name}({params_str}) : {node.return_type}\n"
         result += print_ast(node.body, indent + 1)
         return result
     elif isinstance(node, IfStatement):
@@ -616,6 +1222,49 @@ def print_ast(node, indent=0):
         result += print_ast(node.condition, indent + 2)
         result += f"{prefix}  Body:\n"
         result += print_ast(node.body, indent + 2)
+        return result
+    elif isinstance(node, ForStatement):
+        result += f"{prefix}ForStatement\n"
+        result += f"{prefix}  Init:\n"
+        result += print_ast(node.init, indent + 2)
+        result += f"{prefix}  Condition:\n"
+        result += print_ast(node.condition, indent + 2)
+        result += f"{prefix}  Increment:\n"
+        result += print_ast(node.increment, indent + 2)
+        result += f"{prefix}  Body:\n"
+        result += print_ast(node.body, indent + 2)
+        return result
+    elif isinstance(node, SwitchStatement):
+        result += f"{prefix}SwitchStatement\n"
+        result += f"{prefix}  Expression:\n"
+        result += print_ast(node.expression, indent + 2)
+        for case in node.cases:
+            result += print_ast(case, indent + 1)
+        if node.default:
+            result += print_ast(node.default, indent + 1)
+        return result
+    elif isinstance(node, Case):
+        result += f"{prefix}Case:\n"
+        result += print_ast(node.expression, indent + 2)
+        result += f"{prefix}  Statements:\n"
+        result += print_ast(node.statements, indent + 2)
+        return result
+    elif isinstance(node, DefaultCase):
+        result += f"{prefix}DefaultCase:\n"
+        result += print_ast(node.statements, indent + 2)
+        return result
+    elif isinstance(node, ClassDeclaration):
+        result += f"{prefix}ClassDeclaration: {node.name}\n"
+        for member in node.members:
+            result += print_ast(member, indent + 1)
+        return result
+    elif isinstance(node, TryCatchStatement):
+        result += f"{prefix}TryCatchStatement\n"
+        result += f"{prefix}  Try Block:\n"
+        result += print_ast(node.try_block, indent + 2)
+        result += f"{prefix}  Catch Identifier: {node.catch_identifier}\n"
+        result += f"{prefix}  Catch Block:\n"
+        result += print_ast(node.catch_block, indent + 2)
         return result
     elif isinstance(node, ReturnStatement):
         result += f"{prefix}ReturnStatement\n"
@@ -647,13 +1296,18 @@ def print_ast(node, indent=0):
         result += f"{prefix}Identifier: {node.name}\n"
         return result
     elif isinstance(node, AssignmentExpression):
-        result += f"{prefix}Assignment: {node.identifier} =\n"
+        result += f"{prefix}AssignmentExpression: {node.identifier} =\n"
         result += print_ast(node.value, indent + 1)
         return result
     elif isinstance(node, FunctionCall):
         result += f"{prefix}FunctionCall: {node.name}\n"
         for arg in node.arguments:
             result += print_ast(arg, indent + 1)
+        return result
+    elif isinstance(node, ArrayAccess):
+        result += f"{prefix}ArrayAccess: {node.name}[\n"
+        result += print_ast(node.index, indent + 2)
+        result += f"{prefix}]\n"
         return result
     else:
         result += f"{prefix}Unknown node type: {type(node).__name__}\n"
@@ -664,7 +1318,7 @@ def print_symbol_table(symbol_table, indent=0):
     prefix = '  ' * indent
     result = f"{prefix}Scope: {symbol_table.scope_name}\n"
     for symbol in symbol_table.symbols.values():
-        result += f"{prefix}  {symbol.name} : {symbol.kind}, Declared at: Line {symbol.declared_at[0]}, Column {symbol.declared_at[1]}\n"
+        result += f"{prefix}  {symbol.name} : {symbol.kind}, Type: {symbol.data_type}, Declared at: Line {symbol.declared_at[0]}, Column {symbol.declared_at[1]}\n"
     for child in symbol_table.children:
         result += print_symbol_table(child, indent + 1)
     return result
@@ -674,19 +1328,39 @@ def create_parse_table(grammar, first, follow):
     for non_terminal in grammar:
         parse_table[non_terminal] = {}
         for production in grammar[non_terminal]:
-            for terminal in first_of_sequence(production, first):
+            first_seq = first_of_sequence(production, first)
+            for terminal in first_seq:
                 if terminal != "ε":
-                    parse_table[non_terminal][terminal] = production
+                    if terminal in parse_table[non_terminal]:
+                        parse_table[non_terminal][terminal].append(production)
+                    else:
+                        parse_table[non_terminal][terminal] = [production]
             if "ε" in first_of_sequence(production, first):
                 for terminal in follow[non_terminal]:
-                    parse_table[non_terminal][terminal] = production
+                    if terminal in parse_table[non_terminal]:
+                        parse_table[non_terminal][terminal].append(production)
+                    else:
+                        parse_table[non_terminal][terminal] = [production]
     return parse_table
+
+def first_of_sequence(sequence, first):
+    result = set()
+    for symbol in sequence:
+        result.update(first.get(symbol, {symbol}))
+        if "ε" not in first.get(symbol, {symbol}):
+            break
+    else:
+        result.add("ε")
+    return result
 
 def display_parse_table(parse_table):
     print("Parse Table:")
     for non_terminal, row in parse_table.items():
-        print(f"{non_terminal}: {row}")
-
+        print(f"{non_terminal}:")
+        for terminal, productions in row.items():
+            for production in productions:
+                prod_str = ' '.join(production)
+                print(f"  {terminal} -> {prod_str}")
 def GUI():
     def tokenize_input():
         code = input_text.get("1.0", tk.END).strip()
@@ -714,7 +1388,12 @@ def GUI():
         parse_table = create_parse_table(grammar, first_sets, follow_sets)
         table_output.delete("1.0", tk.END)
         for non_terminal, rules in parse_table.items():
-            table_output.insert(tk.END, f"{non_terminal}: {rules}\n")
+            rules_str = ""
+            for terminal, prods in rules.items():
+                for prod in prods:
+                    prod_str = ' '.join(prod)
+                    rules_str += f"  {terminal} -> {prod_str}\n"
+            table_output.insert(tk.END, f"{non_terminal}:\n{rules_str}\n")
         # Update Errors and Semantic Analysis
         if errors:
             error_output.delete("1.0", tk.END)
@@ -732,7 +1411,12 @@ def GUI():
         parse_table = create_parse_table(grammar, first_sets, follow_sets)
         table_output.delete("1.0", tk.END)
         for non_terminal, rules in parse_table.items():
-            table_output.insert(tk.END, f"{non_terminal}: {rules}\n")
+            rules_str = ""
+            for terminal, prods in rules.items():
+                for prod in prods:
+                    prod_str = ' '.join(prod)
+                    rules_str += f"  {terminal} -> {prod_str}\n"
+            table_output.insert(tk.END, f"{non_terminal}:\n{rules_str}\n")
 
     # Compute FIRST and FOLLOW sets initially
     first_sets = compute_first(grammar)
@@ -782,10 +1466,11 @@ def GUI():
 
     root.mainloop()
 
+
 # Example usage of the tokenizer and parser
 if __name__ == "__main__":
     # Uncomment the following lines if you want to run the CLI version
-    
+
     sample_code = open("x.TEAM", "r", encoding="utf-8").read()
     print("Tokenizing...\n")
     tokens = tokenize(sample_code)
@@ -807,7 +1492,7 @@ if __name__ == "__main__":
     symbol_table_text = print_symbol_table(parser.global_symbol_table)
     print(symbol_table_text)
     
-    print("GUI Simulation: ")
+    print("Launching GUI Simulation...")
     
     # Run the GUI
     GUI()

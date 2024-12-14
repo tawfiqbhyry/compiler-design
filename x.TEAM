@@ -1,17 +1,45 @@
-// This is a comment
-function add(a, b) {
-    var result = a + b;
-    return result;
-}
+// Variable and Array Declarations
+var x: int;
+let y: float = 3.14;
+const z: string = "Hello World";
+array arr: int[5] = {1, 2, 3, 4, 5};
 
-var i = 0; // Declaration of 'i'
 
-if (a > b) {
-    return a;
+// If-Else Statement
+if (x > 0) {
+    y = y + 1.0;
 } else {
-    return b;
+    y = y - 1.0;
 }
 
-while (i < 10) {
-    i = i + 1;
+// While Loop
+while (x < 10) {
+    x = x + 1;
 }
+
+// For Loop
+for (var i: int = 0; i < 5; i = i + 1) {
+    // Function Declaration
+    func add(a: int, b: int): int {
+        return a + b;
+    }
+    arr[i] = add(arr[i], x);
+}
+
+// Class Declaration
+class Calculator {
+    var result: float;
+
+    func multiply(a: float, b: float): float {
+        return a * b;
+    }
+}
+
+// Try-Catch Statement
+try {
+    var result: float = Calculator.multiply(2.0, 3.5);
+} catch (e) {
+    // Handle error
+    y = -1.0;
+}
+
