@@ -2261,26 +2261,26 @@ print(z);
 if __name__ == "__main__":
     # Uncomment the following lines if you want to run the CLI version
 
-    # sample_code = open("x.TEAM", "r", encoding="utf-8").read()
-    # print("Tokenizing...\n")
-    # tokens = tokenize(sample_code)
-    # for token in tokens:
-    #     print(token)
+    sample_code = open("x.TEAM", "r", encoding="utf-8").read()
+    print("Tokenizing...\n")
+    tokens = tokenize(sample_code)
+    for token in tokens:
+        print(token)
     
-    # print("\nParsing...\n")
-    # parser = Parser(tokens)
-    # ast = parser.parse()
-    # ast_text = print_ast(ast)
-    # print(ast_text)
+    print("\nParsing...\n")
+    parser = Parser(tokens)
+    ast = parser.parse()
+    ast_text = print_ast(ast)
+    print(ast_text)
     
-    # print("\nComputing FIRST and FOLLOW sets...\n")
-    # first = compute_first(grammar)
-    # follow = compute_follow(grammar, first)
-    # display_grammar_and_sets(grammar, first, follow)
+    print("\nComputing FIRST and FOLLOW sets...\n")
+    first = compute_first(grammar)
+    follow = compute_follow(grammar, first)
+    display_grammar_and_sets(grammar, first, follow)
     
-    # print("\nSymbol Table:\n")
-    # symbol_table_text = print_symbol_table(parser.global_symbol_table)
-    # print(symbol_table_text)
+    print("\nSymbol Table:\n")
+    symbol_table_text = print_symbol_table(parser.global_symbol_table)
+    print(symbol_table_text)
     
     print("Launching GUI Simulation...")
     
