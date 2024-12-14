@@ -1361,6 +1361,302 @@ def display_parse_table(parse_table):
             for production in productions:
                 prod_str = ' '.join(production)
                 print(f"  {terminal} -> {prod_str}")
+# Backend Class for Code Execution
+class Backend:
+    def __init__(self, ast, symbol_table):
+        self.ast = ast
+        self.global_env = {}
+        self.symbol_table = symbol_table
+        self.output = ""
+        self.classes = {}
+        self.functions = {}
+        self.current_env = self.global_env
+
+    def execute(self):
+        try:
+            self.visit(self.ast)
+            return self.output if self.output else "Execution completed successfully."
+        except Exception as e:
+            return f"Runtime Error: {str(e)}"
+
+    def visit(self, node):
+        method_name = f'visit_{type(node).__name__}'
+        method = getattr(self, method_name, self.generic_visit)
+        return method(node)
+
+    def generic_visit(self, node):
+        raise Exception(f'No visit_{type(node).__name__} method')
+
+    def visit_Program(self, node):
+        for stmt in node.statements:
+            self.visit(stmt)
+
+    def visit_VariableDeclaration(self, node):
+        if node.initializer:
+            value = self.visit(node.initializer)
+        else:
+            value = None
+        self.current_env[node.name] = value
+
+    def visit_ArrayDeclaration(self, node):
+        if node.initializer:
+            value = [self.visit(expr) for expr in node.initializer]
+        else:
+            value = [None] * node.size
+        self.current_env[node.name] = value
+
+    def visit_AssignmentStatement(self, node):
+        value = self.visit(node.value)
+        if node.identifier in self.current_env:
+            self.current_env[node.identifier] = value
+        else:
+            raise Exception(f"Undefined variable '{node.identifier}'")
+
+    def visit_ArrayAssignment(self, node):
+        array = self.current_env.get(node.identifier)
+        if array is None:
+            raise Exception(f"Undefined array '{node.identifier}'")
+        index = self.visit(node.index)
+        if not isinstance(index, int):
+            raise Exception("Array index must be an integer")
+        if index < 0 or index >= len(array):
+            raise Exception("Array index out of bounds")
+        value = self.visit(node.value)
+        array[index] = value
+
+    def visit_FunctionDeclaration(self, node):
+        self.functions[node.name] = node
+
+    def visit_IfStatement(self, node):
+        condition = self.visit(node.condition)
+        if condition:
+            for stmt in node.then_branch:
+                self.visit(stmt)
+        elif node.else_branch:
+            for stmt in node.else_branch:
+                self.visit(stmt)
+
+    def visit_WhileStatement(self, node):
+        while self.visit(node.condition):
+            for stmt in node.body:
+                self.visit(stmt)
+
+    def visit_ForStatement(self, node):
+        self.visit(node.init)
+        while self.visit(node.condition):
+            for stmt in node.body:
+                self.visit(stmt)
+            self.visit(node.increment)
+
+    def visit_SwitchStatement(self, node):
+        expr = self.visit(node.expression)
+        executed = False
+        for case in node.cases:
+            case_expr = self.visit(case.expression)
+            if expr == case_expr:
+                for stmt in case.statements:
+                    self.visit(stmt)
+                executed = True
+                break
+        if not executed and node.default:
+            for stmt in node.default.statements:
+                self.visit(stmt)
+
+    def visit_ClassDeclaration(self, node):
+        class_env = {}
+        for member in node.members:
+            if isinstance(member, VariableDeclaration):
+                class_env[member.name] = member.initializer and self.visit(member.initializer)
+            elif isinstance(member, FunctionDeclaration):
+                class_env[member.name] = member
+        self.classes[node.name] = class_env
+
+    def visit_TryCatchStatement(self, node):
+        try:
+            for stmt in node.try_block:
+                self.visit(stmt)
+        except Exception as e:
+            self.current_env[node.catch_identifier] = str(e)
+            for stmt in node.catch_block:
+                self.visit(stmt)
+
+    def visit_ReturnStatement(self, node):
+        if node.expression:
+            return self.visit(node.expression)
+        return None
+
+    def visit_ExpressionStatement(self, node):
+        return self.visit(node.expression)
+
+    def visit_Block(self, node):
+        # Create a new environment for the block
+        previous_env = self.current_env
+        self.current_env = self.current_env.copy()
+        for stmt in node.statements:
+            result = self.visit(stmt)
+            if isinstance(result, ReturnValue):
+                self.current_env = previous_env
+                return result
+        self.current_env = previous_env
+
+    def visit_BinaryExpression(self, node):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        op = node.operator
+
+        if op == '+':
+            return left + right
+        elif op == '-':
+            return left - right
+        elif op == '*':
+            return left * right
+        elif op == '/':
+            if right == 0:
+                raise Exception("Division by zero")
+            return left / right
+        elif op == '%':
+            return left % right
+        elif op == '==':
+            return left == right
+        elif op == '!=':
+            return left != right
+        elif op == '<':
+            return left < right
+        elif op == '>':
+            return left > right
+        elif op == '<=':
+            return left <= right
+        elif op == '>=':
+            return left >= right
+        elif op == '&&':
+            return left and right
+        elif op == '||':
+            return left or right
+        else:
+            raise Exception(f"Unsupported binary operator '{op}'")
+
+    def visit_UnaryExpression(self, node):
+        operand = self.visit(node.operand)
+        op = node.operator
+
+        if op == '-':
+            return -operand
+        elif op == '!':
+            return not operand
+        else:
+            raise Exception(f"Unsupported unary operator '{op}'")
+
+    def visit_Literal(self, node):
+        return node.value
+
+    def visit_Identifier(self, node):
+        if node.name in self.current_env:
+            return self.current_env[node.name]
+        else:
+            raise Exception(f"Undefined identifier '{node.name}'")
+
+    def visit_AssignmentExpression(self, node):
+        value = self.visit(node.value)
+        if node.identifier in self.current_env:
+            self.current_env[node.identifier] = value
+        else:
+            raise Exception(f"Undefined variable '{node.identifier}'")
+        return value
+
+    def visit_FunctionCall(self, node):
+        if '.' in node.name:
+            # Member function call
+            object_name, method_name = node.name.split('.', 1)
+            obj = self.current_env.get(object_name)
+            if obj is None:
+                raise Exception(f"Undefined object '{object_name}'")
+            class_env = self.classes.get(obj.__class__.__name__)
+            if class_env is None:
+                raise Exception(f"'{object_name}' is not an instance of a defined class")
+            method = class_env.get(method_name)
+            if method is None:
+                raise Exception(f"Undefined method '{method_name}' in class '{obj.__class__.__name__}'")
+            return self.execute_method(obj, method, node.arguments)
+        else:
+            # Regular function call
+            func = self.functions.get(node.name)
+            if func is None:
+                raise Exception(f"Undefined function '{node.name}'")
+            return self.execute_function(func, node.arguments)
+
+    def execute_function(self, func_node, arguments):
+        if len(arguments) != len(func_node.params):
+            raise Exception(f"Function '{func_node.name}' expects {len(func_node.params)} arguments, got {len(arguments)}")
+        
+        # Create a new environment for the function
+        previous_env = self.current_env
+        self.current_env = self.current_env.copy()
+        
+        # Assign arguments to parameters
+        for (param_name, _), arg in zip(func_node.params, arguments):
+            self.current_env[param_name] = self.visit(arg)
+        
+        # Execute function body
+        result = None
+        for stmt in func_node.body:
+            res = self.visit(stmt)
+            if isinstance(res, ReturnValue):
+                result = res.value
+                break
+        
+        # Restore the previous environment
+        self.current_env = previous_env
+        return result
+
+    def execute_method(self, obj, method_node, arguments):
+        if len(arguments) != len(method_node.params):
+            raise Exception(f"Method '{method_node.name}' expects {len(method_node.params)} arguments, got {len(arguments)}")
+        
+        # Create a new environment for the method
+        previous_env = self.current_env
+        self.current_env = self.current_env.copy()
+        
+        # Assign 'self' to the object
+        self.current_env['self'] = obj
+        
+        # Assign arguments to parameters
+        for (param_name, _), arg in zip(method_node.params, arguments):
+            self.current_env[param_name] = self.visit(arg)
+        
+        # Execute method body
+        result = None
+        for stmt in method_node.body:
+            res = self.visit(stmt)
+            if isinstance(res, ReturnValue):
+                result = res.value
+                break
+        
+        # Restore the previous environment
+        self.current_env = previous_env
+        return result
+
+    def visit_MemberFunctionCall(self, node):
+        return self.visit_FunctionCall(node)
+
+    def visit_ArrayAccess(self, node):
+        array = self.current_env.get(node.name)
+        if array is None:
+            raise Exception(f"Undefined array '{node.name}'")
+        index = self.visit(node.index)
+        if not isinstance(index, int):
+            raise Exception("Array index must be an integer")
+        if index < 0 or index >= len(array):
+            raise Exception("Array index out of bounds")
+        return array[index]
+    
+    # Additional visit methods as needed...
+
+# Helper class for handling return values
+class ReturnValue:
+    def __init__(self, value):
+        self.value = value
+
+
 def GUI():
     def tokenize_input():
         code = input_text.get("1.0", tk.END).strip()
@@ -1400,12 +1696,18 @@ def GUI():
             for error in errors:
                 error_output.insert(tk.END, f"{error}\n")
             semantic_output.delete("1.0", tk.END)  # Clear semantic analysis
+            execution_output.delete("1.0", tk.END)  # Clear execution result
         else:
             error_output.delete("1.0", tk.END)
             # Display Symbol Table as Semantic Analysis
             symbol_table_text = print_symbol_table(parser.global_symbol_table, indent=0)
             semantic_output.delete("1.0", tk.END)
             semantic_output.insert("1.0", symbol_table_text)
+            # Execute the code using Backend
+            backend = Backend(ast, parser.global_symbol_table)
+            result = backend.execute()
+            execution_output.delete("1.0", tk.END)
+            execution_output.insert("1.0", result)
 
     def show_parse_table():
         parse_table = create_parse_table(grammar, first_sets, follow_sets)
@@ -1424,7 +1726,7 @@ def GUI():
 
     # GUI
     root = tk.Tk()
-    root.title("Compiler Simulation with Semantic Analysis")
+    root.title("Compiler Simulation with Semantic Analysis and Execution")
 
     # Input Section
     tk.Label(root, text="Source Code:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=5)
@@ -1456,9 +1758,14 @@ def GUI():
     semantic_output = scrolledtext.ScrolledText(root, height=5, width=40)
     semantic_output.grid(row=5, column=1, padx=10, pady=5)
 
+    # Execution Result Output
+    tk.Label(root, text="Execution Result:").grid(row=6, column=0, sticky=tk.W, padx=10, pady=5)
+    execution_output = scrolledtext.ScrolledText(root, height=5, width=60, fg="blue")
+    execution_output.grid(row=7, column=0, padx=10, pady=5)
+
     # Buttons
     button_frame = tk.Frame(root)
-    button_frame.grid(row=6, column=0, columnspan=2, pady=10)
+    button_frame.grid(row=8, column=0, columnspan=2, pady=10)
 
     tk.Button(button_frame, text="Tokenize", command=tokenize_input).grid(row=0, column=0, padx=5)
     tk.Button(button_frame, text="Parse & Analyze", command=parse_input).grid(row=0, column=1, padx=5)
